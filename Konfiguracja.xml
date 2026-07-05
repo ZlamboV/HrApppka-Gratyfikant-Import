@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Konfiguracja StworzPakiet="Tak" StworzInstalator="Tak" NazwaFolderuPakietu="Pakiet" NazwaFolderuInstalatora="Instalator" LokalizacjaSdkBin="C:\ NEXO SDK SFERA\nexoSDK_60.1.1.9292\Bin\" LokalizacjaSdkNarzedzia="C:\ NEXO SDK SFERA\nexoSDK_60.1.1.9292\Narzedzia\">
+  <ParametryInstalacji StworzPlikiBat="Tak" AutomatycznaInstalacja="Nie">
+    <PlikParametrowInstalacji>ParametryInstalacji.txt</PlikParametrowInstalacji>
+  </ParametryInstalacji>
+  <Pakiet>
+    <!-- source manifest -->
+    <Package Identity="HrAppka_Import_Pracowników-1.0.3.7" DisplayName="HrAppka Import" VersionDisplayName="1.0.3.7" MinimumServerVersion="">
+      <Contents>
+        <File Name="HrAppka_Import_Pracowników.dll" />
+        <File Name="HrAppka_Import_Pracowników.plugin" />
+        <File Name="MiniExcel.dll" />
+      </Contents>
+      <LaunchScenarios />
+      <DeployActions />
+      <Dependencies></Dependencies>
+    </Package>
+    <!-- end of source manifest -->
+  </Pakiet>
+  <Instalator>
+    <Tytul>Instalator integracji HrAppka</Tytul>
+    <TekstPowitalny>Wytawy w instalatorze wtyczki importującej dane z HrAppka do Gratyfikant Nexo Pro.</TekstPowitalny>
+    <DostawcaInfo>Copyright © 2026 Antigravity Dev Team</DostawcaInfo>
+    <UtworzSkrotNaPulpicie>false</UtworzSkrotNaPulpicie>
+    <UtworzSkrotWMenuStart>false</UtworzSkrotWMenuStart>
+    <WymaganyRestart>false</WymaganyRestart>
+    <KiP2>false</KiP2>
+    <PlikLogo></PlikLogo>
+    <PlikLicencji></PlikLicencji>
+    <PlikWynikowy>HrAppka_Import_Pracowników-1.0.3.7.exe</PlikWynikowy>
+  </Instalator>
+</Konfiguracja>

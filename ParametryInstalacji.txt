@@ -1,0 +1,5 @@
+Serwer=100.127.240.115\INSERTGT
+UwierzytelnianieWindows=Nie
+Uzytkownik=sa
+Haslo=
+BazaDanych=Nexo_Test_GR

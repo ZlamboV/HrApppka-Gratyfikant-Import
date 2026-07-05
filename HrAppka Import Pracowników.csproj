@@ -1,0 +1,78 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows10.0.17763.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <UseWPF>true</UseWPF>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+    <RootNamespace>HrAppka_Import_Pracowników</RootNamespace>
+    <AssemblyName>HrAppka_Import_Pracowników</AssemblyName>
+
+    <nexoSdkBinPath>C:\ NEXO SDK SFERA\nexoSDK_60.1.1.9292\Bin\</nexoSdkBinPath>
+    <nexoSdkNarzedziaPath>C:\ NEXO SDK SFERA\nexoSDK_60.1.1.9292\Narzedzia\</nexoSdkNarzedziaPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="InsERT.Mox.Launcher">
+      <HintPath>$(nexoSdkBinPath)InsERT.Mox.Launcher.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Microsoft.Data.SqlClient">
+      <HintPath>$(nexoSdkBinPath)Microsoft.Data.SqlClient.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="InsERT.Moria.API">
+      <HintPath>$(nexoSdkBinPath)InsERT.Moria.API.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="InsERT.Moria.DaneDomyslne">
+      <HintPath>$(nexoSdkBinPath)InsERT.Moria.DaneDomyslne.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="InsERT.Moria.ModelDanych">
+      <HintPath>$(nexoSdkBinPath)InsERT.Moria.ModelDanych.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="InsERT.Moria.Sfera">
+      <HintPath>$(nexoSdkBinPath)InsERT.Moria.Sfera.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="InsERT.Mox.Core">
+      <HintPath>$(nexoSdkBinPath)InsERT.Mox.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="InsERT.Mox.EntityFramework.Core">
+      <HintPath>$(nexoSdkBinPath)InsERT.Mox.EntityFramework.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="InsERT.Mox.EntityFrameworkSupport">
+      <HintPath>$(nexoSdkBinPath)InsERT.Mox.EntityFrameworkSupport.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MiniExcel" Version="1.34.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="HrAppka_Import_Pracowników.plugin">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Konfiguracja.xml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="ParametryInstalacji.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+    <Exec Command="if exist &quot;$(nexoSdkNarzedziaPath)PackageAndInstallerBuilder.exe&quot; (call &quot;$(nexoSdkNarzedziaPath)PackageAndInstallerBuilder.exe&quot; /PlikKonfiguracji:Konfiguracja.xml /KatalogDocelowy:&quot;$(TargetDir)\&quot;) else (echo Nie można zbudować pakietu i instalatora, ponieważ nie istnieje plik: &quot;$(nexoSdkNarzedziaPath)PackageAndInstallerBuilder.exe&quot;)" />
+  </Target>
+</Project>
