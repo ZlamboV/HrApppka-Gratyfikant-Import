@@ -5,7 +5,7 @@
   </ParametryInstalacji>
   <Pakiet>
     <!-- source manifest -->
-    <Package Identity="HrAppka_Import_Pracowników-1.0.3.7" DisplayName="HrAppka Import" VersionDisplayName="1.0.3.7" MinimumServerVersion="">
+    <Package Identity="HrAppka_Import_Pracowników-1.0.4.0" DisplayName="HrAppka Import" VersionDisplayName="1.0.4.0" MinimumServerVersion="">
       <Contents>
         <File Name="HrAppka_Import_Pracowników.dll" />
         <File Name="HrAppka_Import_Pracowników.plugin" />
@@ -27,6 +27,6 @@
     <KiP2>false</KiP2>
     <PlikLogo></PlikLogo>
     <PlikLicencji></PlikLicencji>
-    <PlikWynikowy>HrAppka_Import_Pracowników-1.0.3.7.exe</PlikWynikowy>
+    <PlikWynikowy>HrAppka_Import_Pracowników-1.0.4.0.exe</PlikWynikowy>
   </Instalator>
 </Konfiguracja>

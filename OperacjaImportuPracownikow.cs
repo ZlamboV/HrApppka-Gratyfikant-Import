@@ -779,17 +779,19 @@ namespace HrAppka_Import_Pracowników
                             return WynikOperacji.ZakonczonaNiepowodzeniem($"Pracownik został dodany, ale błąd zapisu umowy: {msg}");
                         }
 
-                        // ZUS Registration Declaration Automation (Disabled for now)
-                        if (false && baseUmowa.RaportZUS == (byte)InsERT.Moria.Kadry.TypRaportuZUS.RCA)
+                        // ZUS Registration Declaration Automation (ZUA for Civil Contracts)
+                        if (baseUmowa.RaportZUS == (byte)InsERT.Moria.Kadry.TypRaportuZUS.RCA)
                         {
                             try
                             {
                                 var dekZusMgr = uchwyt.PodajObiektTypu<IDeklaracjeZUS>();
                                 
-                                // Query for an existing unexported zgłoszeniowa declaration
+                                // Query for an existing unexported zgłoszeniowa declaration (the last one)
                                 var existingDecl = dekZusMgr.Dane.Wszystkie()
-                                    .FirstOrDefault(d => d.RodzajDeklaracji == (byte)RodzajDeklaracjiZUS.Zgloszeniowa 
-                                                      && d.StatusWysylki == (byte)StatusWysylkiDeklaracjiZUS.Brak);
+                                    .Where(d => d.RodzajDeklaracji == (byte)RodzajDeklaracjiZUS.Zgloszeniowa 
+                                             && d.StatusWysylki == (byte)StatusWysylkiDeklaracjiZUS.Brak)
+                                    .OrderByDescending(d => d.Id)
+                                    .FirstOrDefault();
 
                                 IDeklaracjaZUS deklBO;
                                 if (existingDecl != null)
