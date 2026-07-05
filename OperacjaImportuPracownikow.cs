@@ -334,19 +334,10 @@ namespace HrAppka_Import_Pracowników
                     // Tax Office (Urząd Skarbowy) - Hybrid Resolution
                     if (!string.IsNullOrWhiteSpace(item.UrzadSkarbowy))
                     {
-                        string usInput = item.UrzadSkarbowy.Trim().ToLower();
-                        string normUsInput = NormalizeKey(usInput);
-
-                        // Try finding local tax office matching name
-                        var localUS = uchwyt.Podmioty().Dane.WszystkieOrganyPodatkowe()
-                            .AsEnumerable()
-                            .FirstOrDefault(o => o.Firma != null && 
-                                                 ((o.Firma.Nazwa != null && NormalizeKey(o.Firma.Nazwa).Contains(normUsInput)) || 
-                                                  (o.NazwaSkrocona != null && NormalizeKey(o.NazwaSkrocona).Contains(normUsInput))));
-
-                        if (localUS != null)
+                        var organ = ResolveOrganPodatkowy(uchwyt, item.UrzadSkarbowy);
+                        if (organ != null)
                         {
-                            podmiot.OrganPodatkowy = localUS.Firma.OrganPodatkowy;
+                            podmiot.OrganPodatkowy = organ;
                         }
                         else
                         {
@@ -1085,6 +1076,102 @@ namespace HrAppka_Import_Pracowników
             }
             catch (Exception ex)
             {
+                LogNexo.Blad(ex);
+            }
+
+            return null;
+        }
+
+        private static string CleanAndStemUs(string input)
+        {
+            if (string.IsNullOrWhiteSpace(input)) return "";
+            
+            var stopWords = new HashSet<string> { "urzad", "skarbowy", "w", "we", "us", "podatkowy", "izba", "dla" };
+            
+            var words = input.ToLower().Split(new[] { ' ', '-', '/' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(w => w.Replace("ą", "a").Replace("ć", "c").Replace("ę", "e")
+                              .Replace("ł", "l").Replace("ń", "n").Replace("ó", "o")
+                              .Replace("ś", "s").Replace("ź", "z").Replace("ż", "z"))
+                .Where(w => !stopWords.Contains(w))
+                .Select(w => {
+                    w = w.Replace("pierwszy", "1").Replace("drugi", "2").Replace("trzeci", "3");
+                    return w.Length > 4 ? w.Substring(0, 4) : w;
+                });
+
+            return string.Join("", words);
+        }
+
+        internal static OrganPodatkowy? ResolveOrganPodatkowy(IUchwyt uchwyt, string usName)
+        {
+            if (string.IsNullOrWhiteSpace(usName)) return null;
+
+            string stemName = CleanAndStemUs(usName);
+            if (string.IsNullOrEmpty(stemName)) return null;
+
+            // 1. Search existing OrganPodatkowy in the customer database
+            var localUS = uchwyt.Podmioty().Dane.WszystkieOrganyPodatkowe()
+                .AsEnumerable()
+                .FirstOrDefault(o => o.Firma != null && 
+                                     (CleanAndStemUs(o.Firma.Nazwa) == stemName || 
+                                      CleanAndStemUs(o.NazwaSkrocona) == stemName));
+
+            if (localUS != null)
+            {
+                return localUS.Firma.OrganPodatkowy;
+            }
+
+            // 2. Search built-in template database using DbContext
+            try
+            {
+                var podmiotyMgr = uchwyt.Podmioty();
+                
+                string kod = null;
+                string templateNazwa = null;
+                
+                using (var bo = podmiotyMgr.UtworzPracownika())
+                {
+                    var getUow = (InsERT.Mox.BusinessObjects.IGetUnitOfWork)bo;
+                    var scope = (InsERT.Mox.Runtime.IInjectionScope)getUow.UnitOfWork;
+                    var context = (ModelDanychContainer)scope.ScopedContainer.GetObject(typeof(ModelDanychContainer));
+                    
+                    var templateUS = context.UrzedySkarbowe
+                        .AsEnumerable()
+                        .FirstOrDefault(t => t.Nazwa != null && CleanAndStemUs(t.Nazwa) == stemName);
+
+                    if (templateUS != null)
+                    {
+                        kod = templateUS.Kod;
+                        templateNazwa = templateUS.Nazwa;
+                    }
+                }
+
+                if (kod != null)
+                {
+                    // 3. Create a new OrganPodatkowy based on the 4-digit code
+                    using (var organBO = podmiotyMgr.UtworzOrganPodatkowy())
+                    {
+                        var organ = (IOrganPodatkowy)organBO;
+                        if (organ.WypelnijDlaKodu(kod))
+                        {
+                            organBO.AutoSymbol();
+                            if (organBO.Zapisz())
+                            {
+                                LogNexo.Informacja($"Utworzono brakujący urząd skarbowy: {templateNazwa} (Kod: {kod})");
+                                return organBO.Dane.Firma.OrganPodatkowy;
+                            }
+                            else
+                            {
+                                var bledy = uchwyt.PodajBledy(organBO);
+                                var msg = string.Join("; ", bledy.Select(x => x.Tresc));
+                                LogNexo.Informacja($"Błąd zapisu urzędu skarbowego {templateNazwa}: {msg}");
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ResolveOrganPodatkowy ERROR]: {ex}");
                 LogNexo.Blad(ex);
             }
 

@@ -352,43 +352,40 @@ class SferaRunner
 {
     public static void Execute()
     {
-        LogNexo.Informacja("Rozpoczęto diagnostyczny test obywatelstwa i panstwa");
+        LogNexo.Informacja("Rozpoczęto diagnostyczny test urzędów skarbowych");
 
         using (InsERT.Moria.Sfera.Uchwyt uchwyt = UruchomSfere())
         {
-            var testCases = new[] { "ukraina", "paragwaj", "zimbabwe" };
+            var testCases = new[] { 
+                "Drugi Urząd Skarbowy w Opolu", 
+                "Urząd Skarbowy Kraków-Krowodrza", 
+                "Urząd Skarbowy Warszawa-Śródmieście" 
+            };
 
             foreach (var testCase in testCases)
             {
-                Console.WriteLine($"\n--- TESTING: {testCase} ---");
+                Console.WriteLine($"\n--- TESTING TAX OFFICE: {testCase} ---");
                 try
                 {
-                    var obywatelstwo = HrAppka_Import_Pracowników.OperacjaImportuPracownikow.ResolveObywatelstwo(uchwyt, testCase);
-                    if (obywatelstwo != null)
+                    var organ = HrAppka_Import_Pracowników.OperacjaImportuPracownikow.ResolveOrganPodatkowy(uchwyt, testCase);
+                    if (organ != null)
                     {
-                        Console.WriteLine($"SUCCESS: Resolved to Citizenship: '{obywatelstwo.Nazwa}'");
-                        if (obywatelstwo.Panstwo != null)
-                        {
-                            Console.WriteLine($"  Linked Country: '{obywatelstwo.Panstwo.Nazwa}' (ISO: '{obywatelstwo.Panstwo.KodPanstwaUE}')");
-                        }
-                        else
-                        {
-                            Console.WriteLine("  WARNING: Country link is NULL!");
-                        }
+                        Console.WriteLine($"SUCCESS: Resolved to OrganPodatkowy: '{organ.Firma.Nazwa}'");
                     }
                     else
                     {
-                        Console.WriteLine("FAILURE: ResolveObywatelstwo returned null!");
+                        Console.WriteLine("FAILURE: ResolveOrganPodatkowy returned null!");
                     }
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine($"EXCEPTION during test: {ex.Message}");
-                    Console.WriteLine(ex.StackTrace);
+                    if (ex.InnerException != null)
+                        Console.WriteLine($"  Inner Exception: {ex.InnerException.Message}");
                 }
             }
         }
-        LogNexo.Informacja("Zakończono diagnostyczny test");
+        LogNexo.Informacja("Zakończono diagnostyczny test urzędów skarbowych");
     }
 
     static void WypiszBledy(Uchwyt sfera, IObiektBiznesowy bo)
