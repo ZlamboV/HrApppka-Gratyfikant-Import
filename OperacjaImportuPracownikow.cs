@@ -386,30 +386,14 @@ namespace HrAppka_Import_Pracowników
                         osoba.Plec = (byte)GetPlec(finalGender);
                     }
 
-                    /*
                     if (!string.IsNullOrWhiteSpace(item.Obywatelstwo))
                     {
-                        var panstwo = ZnajdzPanstwo(uchwyt, item.Obywatelstwo);
-                        var obywatelstwaMgr = uchwyt.PodajObiektTypu<InsERT.Moria.Klienci.IObywatelstwa>();
-                        var obywatelstwo = obywatelstwaMgr.Dane.Wszystkie().FirstOrDefault(o => o.Panstwo.Id == panstwo.Id);
-                        if (obywatelstwo == null)
-                        {
-                            using (var obyBO = obywatelstwaMgr.Utworz())
-                            {
-                                obyBO.Dane.Nazwa = item.Obywatelstwo;
-                                obyBO.Dane.Panstwo = panstwo;
-                                if (obyBO.Zapisz())
-                                {
-                                    obywatelstwo = obyBO.Dane;
-                                }
-                            }
-                        }
+                        var obywatelstwo = ResolveObywatelstwo(uchwyt, item.Obywatelstwo);
                         if (obywatelstwo != null)
                         {
                             osoba.Pracownik.Obywatelstwo = obywatelstwo;
                         }
                     }
-                    */
 
                     if (!string.IsNullOrWhiteSpace(item.Miejscowosc) && !string.IsNullOrWhiteSpace(item.NrDomu))
                     {
@@ -975,5 +959,172 @@ namespace HrAppka_Import_Pracowników
                 return (OddzialNFZ)Enum.Parse(typeof(OddzialNFZ), "bydgoszcz");
             return null;
         }
+
+        internal static Panstwo? ResolvePanstwo(IUchwyt uchwyt, string inputName, out string platnikCitizenshipName)
+        {
+            platnikCitizenshipName = "";
+            if (string.IsNullOrWhiteSpace(inputName)) return null;
+
+            string normInput = inputName.Trim().ToLower();
+
+            // 1. Search in our static CountryRegistry
+            var countryInfo = CountryRegistry.FirstOrDefault(c => 
+                c.PolishName.Equals(normInput, StringComparison.OrdinalIgnoreCase) || 
+                c.CitizenshipAdjective.Equals(normInput, StringComparison.OrdinalIgnoreCase) ||
+                c.IsoCode.Equals(normInput, StringComparison.OrdinalIgnoreCase)
+            );
+
+            string searchName = normInput;
+            string isoCode = "";
+
+            if (countryInfo != null)
+            {
+                searchName = countryInfo.PolishName;
+                isoCode = countryInfo.IsoCode;
+                platnikCitizenshipName = countryInfo.CitizenshipAdjective;
+            }
+            else
+            {
+                // Fallback guessing
+                platnikCitizenshipName = normInput; // fallback
+            }
+
+            var panstwaMgr = uchwyt.PodajObiektTypu<InsERT.Moria.Klienci.IPanstwa>();
+            
+            // 2. Search database by name
+            var dbPanstwo = panstwaMgr.Dane.Wszystkie().FirstOrDefault(p => 
+                p.Nazwa.Equals(searchName, StringComparison.OrdinalIgnoreCase) || 
+                p.KodPanstwaUE.Equals(searchName, StringComparison.OrdinalIgnoreCase)
+            );
+
+            if (dbPanstwo != null)
+            {
+                return dbPanstwo;
+            }
+
+            // 3. If country is not in database, create it automatically
+            if (!string.IsNullOrEmpty(isoCode))
+            {
+                try
+                {
+                    using (var panstwoBO = panstwaMgr.Utworz())
+                    {
+                        panstwoBO.Dane.Nazwa = searchName;
+                        panstwoBO.Dane.KodPanstwaUE = isoCode;
+                        panstwoBO.Dane.CzlonekUE = false;
+
+                        if (panstwoBO.Zapisz())
+                        {
+                            LogNexo.Informacja($"Utworzono brakujące państwo: {searchName} (ISO: {isoCode})");
+                            return panstwoBO.Dane;
+                        }
+                        else
+                        {
+                            var bledy = uchwyt.PodajBledy(panstwoBO);
+                            var msg = string.Join("; ", bledy.Select(x => x.Tresc));
+                            LogNexo.Informacja($"Błąd zapisu państwa {searchName}: {msg}");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogNexo.Blad(ex);
+                }
+            }
+
+            // Ultimate fallback
+            return panstwaMgr.Dane.Wszystkie().FirstOrDefault(p => p.KodPanstwaUE == "PL");
+        }
+
+        internal static Obywatelstwo? ResolveObywatelstwo(IUchwyt uchwyt, string inputName)
+        {
+            if (string.IsNullOrWhiteSpace(inputName)) return null;
+
+            string platnikName;
+            var panstwo = ResolvePanstwo(uchwyt, inputName, out platnikName);
+            if (panstwo == null) return null;
+
+            if (string.IsNullOrEmpty(platnikName))
+            {
+                platnikName = panstwo.Nazwa.ToLower() + "skie"; // fallback guess
+            }
+
+            var obywatelstwaMgr = uchwyt.PodajObiektTypu<InsERT.Moria.Klienci.IObywatelstwa>();
+            
+            // 1. Search existing citizenship in DB
+            var dbObywatelstwo = obywatelstwaMgr.Dane.Wszystkie().FirstOrDefault(o => 
+                o.Nazwa.Equals(platnikName, StringComparison.OrdinalIgnoreCase) || 
+                (o.Panstwo != null && o.Panstwo.Id == panstwo.Id)
+            );
+
+            if (dbObywatelstwo != null)
+            {
+                return dbObywatelstwo;
+            }
+
+            // 2. If not found, create new citizenship in DB
+            try
+            {
+                using (var obyBO = obywatelstwaMgr.Utworz())
+                {
+                    obyBO.Dane.Nazwa = platnikName;
+                    obyBO.Dane.Panstwo = panstwo;
+
+                    if (obyBO.Zapisz())
+                    {
+                        LogNexo.Informacja($"Utworzono brakujące obywatelstwo: {platnikName}");
+                        return obyBO.Dane;
+                    }
+                    else
+                    {
+                        var bledy = uchwyt.PodajBledy(obyBO);
+                        var msg = string.Join("; ", bledy.Select(x => x.Tresc));
+                        LogNexo.Informacja($"Błąd zapisu obywatelstwa {platnikName}: {msg}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LogNexo.Blad(ex);
+            }
+
+            return null;
+        }
+
+        private class CountryInfo
+        {
+            public string PolishName { get; }
+            public string IsoCode { get; }
+            public string CitizenshipAdjective { get; }
+
+            public CountryInfo(string polishName, string isoCode, string citizenshipAdjective)
+            {
+                PolishName = polishName;
+                IsoCode = isoCode;
+                CitizenshipAdjective = citizenshipAdjective;
+            }
+        }
+
+        private static readonly List<CountryInfo> CountryRegistry = new List<CountryInfo>
+        {
+            new CountryInfo("Polska", "PL", "polskie"),
+            new CountryInfo("Ukraina", "UA", "ukraińskie"),
+            new CountryInfo("Białoruś", "BY", "białoruskie"),
+            new CountryInfo("Gruzja", "GE", "gruzińskie"),
+            new CountryInfo("Mołdawia", "MD", "mołdawskie"),
+            new CountryInfo("Rosja", "RU", "rosyjskie"),
+            new CountryInfo("Paragwaj", "PY", "paragwajskie"),
+            new CountryInfo("Zimbabwe", "ZW", "zimbabweńskie"),
+            new CountryInfo("Indie", "IN", "indyjskie"),
+            new CountryInfo("Wietnam", "VN", "wietnamskie"),
+            new CountryInfo("Kazachstan", "KZ", "kazachskie"),
+            new CountryInfo("Uzbekistan", "UZ", "uzbekistańskie"),
+            new CountryInfo("Armenia", "AM", "armeńskie"),
+            new CountryInfo("Filipiny", "PH", "filipińskie"),
+            new CountryInfo("Niemcy", "DE", "niemieckie"),
+            new CountryInfo("Czechy", "CZ", "czeskie"),
+            new CountryInfo("Słowacja", "SK", "słowackie"),
+            new CountryInfo("Turcja", "TR", "tureckie")
+        };
     }
 }
