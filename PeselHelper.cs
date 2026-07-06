@@ -88,5 +88,38 @@ namespace HrAppka_Import_Pracowników
                 age--;
             return age;
         }
+
+        /// <summary>
+        /// Normalizes a PESEL string that may have been corrupted by Excel's
+        /// scientific notation (e.g. "8.4030421022E10" instead of "84030421022").
+        /// Also trims whitespace and removes any non-digit characters after conversion.
+        /// </summary>
+        public static string NormalizePesel(string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+                return raw;
+
+            string trimmed = raw.Trim();
+
+            // Detect scientific notation (contains 'E' or 'e' with digits)
+            if (trimmed.IndexOf('E') >= 0 || trimmed.IndexOf('e') >= 0)
+            {
+                if (double.TryParse(trimmed, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out double numericValue))
+                {
+                    // Convert back to integer string (PESEL is always 11 digits, no decimals)
+                    long peselLong = (long)numericValue;
+                    string converted = peselLong.ToString();
+
+                    // Pad with leading zero if needed (PESEL starting with 0)
+                    if (converted.Length == 10)
+                        converted = "0" + converted;
+
+                    return converted;
+                }
+            }
+
+            return trimmed;
+        }
     }
 }

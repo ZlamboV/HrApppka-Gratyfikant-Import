@@ -94,7 +94,7 @@ namespace HrAppka_Import_Pracowników
                 row.Nazwisko = GetVal(d, "Pracownik - Nazwisko");
                 row.PlecExcel = GetVal(d, "Pracownik - Płeć");
                 row.BirthDateExcel = GetVal(d, "Pracownik - Data urodzenia");
-                row.Pesel = GetVal(d, "Pracownik - Numery identyfikacyjne - PESEL");
+                row.Pesel = PeselHelper.NormalizePesel(GetVal(d, "Pracownik - Numery identyfikacyjne - PESEL"));
                 row.Obywatelstwo = GetVal(d, "Pracownik - Obywatelstwo");
                 row.Paszport = GetVal(d, "Pracownik - Numery identyfikacyjne - Paszport");
                 row.PaszportWydany = GetVal(d, "Pracownik - Numery identyfikacyjne - Paszport - Data wydania");
