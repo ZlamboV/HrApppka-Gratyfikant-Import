@@ -352,158 +352,40 @@ class SferaRunner
 {
     public static void Execute()
     {
-        LogNexo.Informacja("Rozpoczęto diagnostyczny import z Excela w Program.cs");
-        string excelPath = @"C:\Users\zasc2\Downloads\Eksport - Umowy - 20260615213643.xlsx";
-        Console.WriteLine($"Reading excel: {excelPath}");
-        var excelData = MiniExcel.Query(excelPath, useHeaderRow: true).Cast<IDictionary<string, object>>().ToList();
-        Console.WriteLine($"Found {excelData.Count} rows");
-        
-        var firstRow = excelData.FirstOrDefault();
-        if (firstRow == null)
-        {
-            Console.WriteLine("Excel file is empty!");
-            return;
-        }
+        LogNexo.Informacja("Rozpoczęto diagnostyczny test urzędów skarbowych");
 
         using (InsERT.Moria.Sfera.Uchwyt uchwyt = UruchomSfere())
         {
-            var podmiotyMgr = uchwyt.Podmioty();
+            var testCases = new[] { 
+                "Drugi Urząd Skarbowy w Opolu", 
+                "Urząd Skarbowy Kraków-Krowodrza", 
+                "Urząd Skarbowy Warszawa-Śródmieście" 
+            };
 
-            string pesel = GetVal(firstRow, "Pracownik - Numery identyfikacyjne - PESEL");
-            Console.WriteLine($"Target PESEL: {pesel}");
-
-            IPodmiot podmiotBO;
-            var existingOsoba = podmiotyMgr.Dane.WszystkieOsoby()
-                .FirstOrDefault(p => p.Osoba != null && p.Osoba.PESEL == pesel);
-
-            if (existingOsoba != null)
+            foreach (var testCase in testCases)
             {
-                if (existingOsoba.Osoba.Pracownik != null)
+                Console.WriteLine($"\n--- TESTING TAX OFFICE: {testCase} ---");
+                try
                 {
-                    Console.WriteLine("Osoba exists and has Pracownik role. Loading existing...");
-                    podmiotBO = podmiotyMgr.Znajdz(existingOsoba);
-                }
-                else
-                {
-                    Console.WriteLine("Osoba exists but does not have Pracownik role. Transforming...");
-                    podmiotBO = podmiotyMgr.PrzeksztalcOsobeNaPracownika(existingOsoba);
-                }
-            }
-            else
-            {
-                Console.WriteLine("Osoba does not exist. Creating new...");
-                podmiotBO = podmiotyMgr.UtworzPracownika();
-                podmiotBO.AutoSymbol();
-            }
-
-            using (podmiotBO)
-            {
-                var podmiot = podmiotBO.Dane;
-                var osoba = podmiot.Osoba;
-
-                osoba.Imie = GetVal(firstRow, "Pracownik - Imię")?.ToUpper().Trim();
-                osoba.DrugieImie = GetVal(firstRow, "Pracownik - Drugie imię")?.ToUpper().Trim();
-                osoba.Nazwisko = GetVal(firstRow, "Pracownik - Nazwisko")?.ToUpper().Trim();
-                osoba.PESEL = pesel;
-                
-                string birthDateStr = GetVal(firstRow, "Pracownik - Data urodzenia");
-                if (DateTime.TryParse(birthDateStr, out DateTime birthDate))
-                {
-                    osoba.DataUrodzenia = birthDate;
-                }
-
-                string genderStr = GetVal(firstRow, "Pracownik - Płeć");
-                if (!string.IsNullOrEmpty(genderStr))
-                {
-                    osoba.Plec = (byte)GetPlec(genderStr);
-                }
-
-                // Add address
-                var adres = podmiot.AdresPodstawowy ?? podmiotBO.DodajAdres(uchwyt.TypyAdresu().DaneDomyslne.Glowny);
-                adres.Nazwa = "Adres zamieszkania";
-                adres.Szczegoly.Ulica = GetVal(firstRow, "Pracownik - Adres Zamieszkania - Ulica");
-                adres.Szczegoly.NrDomu = GetVal(firstRow, "Pracownik - Adres Zamieszkania - Numer domu / mieszkania");
-                adres.Szczegoly.Miejscowosc = GetVal(firstRow, "Pracownik - Adres Zamieszkania - Miejscowość");
-                adres.Szczegoly.KodPocztowy = GetVal(firstRow, "Pracownik - Adres Zamieszkania - Kod pocztowy");
-                adres.Szczegoly.Poczta = adres.Szczegoly.Miejscowosc;
-                adres.Panstwo = ZnajdzPanstwo(uchwyt, GetVal(firstRow, "Pracownik - Adres Zamieszkania - Kraj"));
-
-                string email = GetVal(firstRow, "Pracownik - Dane kontaktowe - E-mail");
-                if (!string.IsNullOrWhiteSpace(email))
-                {
-                    var existingEmail = podmiot.Kontakty.FirstOrDefault(k => k.Rodzaj.Id == uchwyt.RodzajeKontaktu().DaneDomyslne.Email.Id);
-                    if (existingEmail != null)
+                    var organ = HrAppka_Import_Pracowników.OperacjaImportuPracownikow.ResolveOrganPodatkowy(uchwyt, testCase);
+                    if (organ != null)
                     {
-                        existingEmail.Wartosc = email;
+                        Console.WriteLine($"SUCCESS: Resolved to OrganPodatkowy: '{organ.Firma.Nazwa}'");
                     }
                     else
                     {
-                        var k = new Kontakt();
-                        k.Rodzaj = uchwyt.RodzajeKontaktu().DaneDomyslne.Email;
-                        k.Wartosc = email;
-                        k.Podstawowy = true;
-                        podmiot.Kontakty.Add(k);
+                        Console.WriteLine("FAILURE: ResolveOrganPodatkowy returned null!");
                     }
                 }
-
-
-                // REFLECTION DUMP BEFORE SAVE
-                Console.WriteLine("--- DUMPING PODMIOT STATE BEFORE SAVE ---");
-                foreach (var prop in podmiot.GetType().GetProperties())
+                catch (Exception ex)
                 {
-                    if (prop.Name.Contains("Sym") || prop.Name.Contains("Syg") || prop.Name.Contains("Kod") || prop.Name.Contains("Nazwa"))
-                    {
-                        try
-                        {
-                            var val = prop.GetValue(podmiot);
-                            Console.WriteLine($"  Podmiot.{prop.Name} = {val}");
-                            if (val != null && prop.Name == "Sygnatura")
-                            {
-                                foreach (var subProp in val.GetType().GetProperties())
-                                {
-                                    Console.WriteLine($"    Sygnatura.{subProp.Name} = {subProp.GetValue(val)}");
-                                }
-                            }
-                        }
-                        catch {}
-                    }
-                }
-
-                EventHandler<System.Runtime.ExceptionServices.FirstChanceExceptionEventArgs> handler = (sender, e) =>
-                {
-                    var ex = e.Exception;
-                    string name = ex.GetType().FullName;
-                    Console.WriteLine($"[FirstChanceException] Type: {name}, Message: {ex.Message}");
+                    Console.WriteLine($"EXCEPTION during test: {ex.Message}");
                     if (ex.InnerException != null)
-                    {
-                        Console.WriteLine($"  Inner Exception: {ex.InnerException.GetType().FullName}, Message: {ex.InnerException.Message}");
-                        if (ex.InnerException.InnerException != null)
-                        {
-                            Console.WriteLine($"    Second Inner Exception: {ex.InnerException.InnerException.GetType().FullName}, Message: {ex.InnerException.InnerException.Message}");
-                        }
-                    }
-                };
-
-
-                AppDomain.CurrentDomain.FirstChanceException += handler;
-                try
-                {
-                    Console.WriteLine("Saving employee...");
-                    bool saved = podmiotBO.Zapisz();
-                    Console.WriteLine($"Employee save result: {saved}");
-                    if (!saved)
-                    {
-                        WypiszBledy(uchwyt, podmiotBO);
-                        return;
-                    }
+                        Console.WriteLine($"  Inner Exception: {ex.InnerException.Message}");
                 }
-                finally
-                {
-                    AppDomain.CurrentDomain.FirstChanceException -= handler;
-                }
-                LogNexo.Informacja("Zakończono diagnostyczny import z Excela w Program.cs");
             }
         }
+        LogNexo.Informacja("Zakończono diagnostyczny test urzędów skarbowych");
     }
 
     static void WypiszBledy(Uchwyt sfera, IObiektBiznesowy bo)

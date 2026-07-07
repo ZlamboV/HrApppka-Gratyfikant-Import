@@ -94,7 +94,7 @@ namespace HrAppka_Import_Pracowników
                 row.Nazwisko = GetVal(d, "Pracownik - Nazwisko");
                 row.PlecExcel = GetVal(d, "Pracownik - Płeć");
                 row.BirthDateExcel = GetVal(d, "Pracownik - Data urodzenia");
-                row.Pesel = GetVal(d, "Pracownik - Numery identyfikacyjne - PESEL");
+                row.Pesel = PeselHelper.NormalizePesel(GetVal(d, "Pracownik - Numery identyfikacyjne - PESEL"));
                 row.Obywatelstwo = GetVal(d, "Pracownik - Obywatelstwo");
                 row.Paszport = GetVal(d, "Pracownik - Numery identyfikacyjne - Paszport");
                 row.PaszportWydany = GetVal(d, "Pracownik - Numery identyfikacyjne - Paszport - Data wydania");
@@ -174,6 +174,140 @@ namespace HrAppka_Import_Pracowników
             PreAnalyzeRows(kontekstOperacji.Uchwyt, rows);
 
             okno.Pokaz(rows, x => ZaimportujRow(kontekstOperacji, x));
+
+            // Show summary after import completes
+            PokazPodsumowanieImportu(kontekstOperacji, rows);
+        }
+
+        private void PokazPodsumowanieImportu(IKontekstOperacji kontekstOperacji, List<PracownikImportRow> rows)
+        {
+            var zaimportowani = rows.Where(r => r.Status.StartsWith("Zakończon") || r.Status == "Gotowy" || r.Status == "Gotowy (Cudzoziemiec)").ToList();
+            var pominieci = rows.Where(r => r.Status.StartsWith("Pominięty") || r.Status.StartsWith("Pomini")).ToList();
+            var bledy = rows.Where(r => r.Status.StartsWith("Błąd") || r.Status.StartsWith("Bl") || r.Ostrzezenia.Contains("błąd") || r.Ostrzezenia.Contains("Błąd")).ToList();
+            var zOstrzezeniami = rows.Where(r => !string.IsNullOrEmpty(r.Ostrzezenia) && !pominieci.Contains(r) && !bledy.Contains(r)).ToList();
+
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine($"Łącznie wierszy: {rows.Count}");
+            sb.AppendLine($"Zaimportowano: {zaimportowani.Count}");
+            sb.AppendLine($"Pominięto (już istnieją): {pominieci.Count}");
+            if (bledy.Count > 0)
+                sb.AppendLine($"Błędy: {bledy.Count}");
+            if (zOstrzezeniami.Count > 0)
+                sb.AppendLine($"Z ostrzeżeniami: {zOstrzezeniami.Count}");
+
+            if (pominieci.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("--- Pominięci pracownicy (już istnieją) ---");
+                foreach (var p in pominieci)
+                {
+                    sb.AppendLine($"  • {p.Nazwisko} {p.Imie} | PESEL: {p.Pesel} | Umowa: {p.OpisUmowy}");
+                }
+            }
+
+            if (bledy.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("--- Błędy ---");
+                foreach (var p in bledy)
+                {
+                    sb.AppendLine($"  • {p.Nazwisko} {p.Imie} | {p.Status} | {p.Ostrzezenia}");
+                }
+            }
+
+            if (zOstrzezeniami.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("--- Z ostrzeżeniami ---");
+                foreach (var p in zOstrzezeniami)
+                {
+                    sb.AppendLine($"  • {p.Nazwisko} {p.Imie} | {p.Ostrzezenia}");
+                }
+            }
+
+            try
+            {
+                Okna.PokazOknoZInformacja(kontekstOperacji.Uchwyt, sb.ToString());
+            }
+            catch
+            {
+                // Fallback if PokazOknoZInformacja doesn't exist or fails
+                try
+                {
+                    System.Windows.MessageBox.Show(sb.ToString(), "Podsumowanie importu", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                }
+                catch { /* ignore UI errors */ }
+            }
+
+            LogNexo.Informacja($"Podsumowanie importu: {sb}");
+        }
+
+        private void SprawdzIstniejacyPracownikUmowy(IUchwyt uchwyt, Podmiot existingOsoba, PracownikImportRow row)
+        {
+            if (existingOsoba != null && existingOsoba.Osoba?.Pracownik != null)
+            {
+                int employeeId = existingOsoba.Osoba.Pracownik.Id;
+                DateTime? targetStartDate = null;
+                if (!string.IsNullOrWhiteSpace(row.DataRozpoczecia) && DateTime.TryParse(row.DataRozpoczecia, out DateTime dtStart))
+                {
+                    targetStartDate = dtStart;
+                }
+
+                bool contractExists = false;
+                if (targetStartDate.HasValue)
+                {
+                    try
+                    {
+                        var umowyMgr = uchwyt.UmowyPracowniczeGr();
+                        var query = (System.Collections.IEnumerable)umowyMgr.Dane.Wszystkie();
+                        foreach (dynamic u in query)
+                        {
+                            try
+                            {
+                                if (u.Pracownik != null && u.Pracownik.Id == employeeId &&
+                                    u.OkresObowiazywania != null && u.OkresObowiazywania.DataPoczatkowa == targetStartDate.Value)
+                                {
+                                    string defName = "";
+                                    try { defName = u.TypUmowyPracowniczej?.TypUmowyPracowniczejDlaKtoregoAktualny?.Nazwa ?? ""; } catch {}
+                                    if (string.IsNullOrEmpty(defName))
+                                    {
+                                        try { defName = u.TypUmowyPracowniczej?.TypUmowyPracowniczejDlaKtoregoHistoria?.Nazwa ?? ""; } catch {}
+                                    }
+                                    if (defName.Equals("Umowa zlecenie", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        contractExists = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            catch
+                            {
+                                // Ignore inner dynamic evaluation exception
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        LogNexo.Informacja($"Błąd sprawdzania umowy: {ex.Message}");
+                    }
+                }
+
+                if (contractExists)
+                {
+                    row.Status = "Aktualizacja (Dane)";
+                    row.Ostrzezenia += "Pracownik i umowa o tej dacie rozpoczęcia już istnieją. Zostaną zaktualizowane tylko dane kartoteki. ";
+                }
+                else
+                {
+                    row.Status = "Aktualizacja (Nowa umowa)";
+                    row.Ostrzezenia += "Pracownik już istnieje, zostanie dodana nowa umowa. ";
+                }
+            }
+            else
+            {
+                row.Status = "Aktualizacja (Nowa umowa)";
+                row.Ostrzezenia += "Osoba istnieje w Nexo, zostanie przekształcona w pracownika i dodana nowa umowa. ";
+            }
         }
 
         private void PreAnalyzeRows(IUchwyt uchwyt, List<PracownikImportRow> rows)
@@ -202,8 +336,9 @@ namespace HrAppka_Import_Pracowników
                     {
                         if (existingPassports.Contains(row.Paszport))
                         {
-                            row.Ostrzezenia += "Pracownik o tym Paszporcie już istnieje. ";
-                            row.Status = "Pominięty (Już istnieje)";
+                            var existingOsoba = podmioty.Dane.WszystkieOsoby()
+                                .FirstOrDefault(p => p.Osoba != null && p.Osoba.SeriaINumerDokumentuTozsamosci == row.Paszport);
+                            SprawdzIstniejacyPracownikUmowy(uchwyt, existingOsoba, row);
                         }
                         else
                         {
@@ -242,8 +377,9 @@ namespace HrAppka_Import_Pracowników
 
                     if (existingPesels.Contains(row.Pesel))
                     {
-                        row.Ostrzezenia += "Pracownik o tym PESEL już istnieje. ";
-                        row.Status = "Pominięty (Już istnieje)";
+                        var existingOsoba = podmioty.Dane.WszystkieOsoby()
+                            .FirstOrDefault(p => p.Osoba != null && p.Osoba.PESEL == row.Pesel);
+                        SprawdzIstniejacyPracownikUmowy(uchwyt, existingOsoba, row);
                     }
                 }
 
@@ -334,19 +470,10 @@ namespace HrAppka_Import_Pracowników
                     // Tax Office (Urząd Skarbowy) - Hybrid Resolution
                     if (!string.IsNullOrWhiteSpace(item.UrzadSkarbowy))
                     {
-                        string usInput = item.UrzadSkarbowy.Trim().ToLower();
-                        string normUsInput = NormalizeKey(usInput);
-
-                        // Try finding local tax office matching name
-                        var localUS = uchwyt.Podmioty().Dane.WszystkieOrganyPodatkowe()
-                            .AsEnumerable()
-                            .FirstOrDefault(o => o.Firma != null && 
-                                                 ((o.Firma.Nazwa != null && NormalizeKey(o.Firma.Nazwa).Contains(normUsInput)) || 
-                                                  (o.NazwaSkrocona != null && NormalizeKey(o.NazwaSkrocona).Contains(normUsInput))));
-
-                        if (localUS != null)
+                        var organ = ResolveOrganPodatkowy(uchwyt, item.UrzadSkarbowy);
+                        if (organ != null)
                         {
-                            podmiot.OrganPodatkowy = localUS.Firma.OrganPodatkowy;
+                            podmiot.OrganPodatkowy = organ;
                         }
                         else
                         {
@@ -386,30 +513,14 @@ namespace HrAppka_Import_Pracowników
                         osoba.Plec = (byte)GetPlec(finalGender);
                     }
 
-                    /*
                     if (!string.IsNullOrWhiteSpace(item.Obywatelstwo))
                     {
-                        var panstwo = ZnajdzPanstwo(uchwyt, item.Obywatelstwo);
-                        var obywatelstwaMgr = uchwyt.PodajObiektTypu<InsERT.Moria.Klienci.IObywatelstwa>();
-                        var obywatelstwo = obywatelstwaMgr.Dane.Wszystkie().FirstOrDefault(o => o.Panstwo.Id == panstwo.Id);
-                        if (obywatelstwo == null)
-                        {
-                            using (var obyBO = obywatelstwaMgr.Utworz())
-                            {
-                                obyBO.Dane.Nazwa = item.Obywatelstwo;
-                                obyBO.Dane.Panstwo = panstwo;
-                                if (obyBO.Zapisz())
-                                {
-                                    obywatelstwo = obyBO.Dane;
-                                }
-                            }
-                        }
+                        var obywatelstwo = ResolveObywatelstwo(uchwyt, item.Obywatelstwo);
                         if (obywatelstwo != null)
                         {
                             osoba.Pracownik.Obywatelstwo = obywatelstwo;
                         }
                     }
-                    */
 
                     if (!string.IsNullOrWhiteSpace(item.Miejscowosc) && !string.IsNullOrWhiteSpace(item.NrDomu))
                     {
@@ -615,7 +726,11 @@ namespace HrAppka_Import_Pracowników
                 }
 
                 // Civil Contract
-                if (!string.IsNullOrWhiteSpace(item.TypUmowy) && !string.IsNullOrWhiteSpace(item.DataRozpoczecia))
+                if (item.Status == "Aktualizacja (Dane)")
+                {
+                    LogNexo.Informacja($"Pominięto tworzenie umowy i zgłoszenia ZUS dla {item.Imie} {item.Nazwisko} - umowa już istnieje.");
+                }
+                else if (!string.IsNullOrWhiteSpace(item.TypUmowy) && !string.IsNullOrWhiteSpace(item.DataRozpoczecia))
                 {
                     if (!DateTime.TryParse(item.DataRozpoczecia, out DateTime startDate))
                     {
@@ -804,17 +919,19 @@ namespace HrAppka_Import_Pracowników
                             return WynikOperacji.ZakonczonaNiepowodzeniem($"Pracownik został dodany, ale błąd zapisu umowy: {msg}");
                         }
 
-                        // ZUS Registration Declaration Automation (Disabled for now)
-                        if (false && baseUmowa.RaportZUS == (byte)InsERT.Moria.Kadry.TypRaportuZUS.RCA)
+                        // ZUS Registration Declaration Automation (ZUA for Civil Contracts)
+                        if (baseUmowa.RaportZUS == (byte)InsERT.Moria.Kadry.TypRaportuZUS.RCA)
                         {
                             try
                             {
                                 var dekZusMgr = uchwyt.PodajObiektTypu<IDeklaracjeZUS>();
                                 
-                                // Query for an existing unexported zgłoszeniowa declaration
+                                // Query for an existing unexported zgłoszeniowa declaration (the last one)
                                 var existingDecl = dekZusMgr.Dane.Wszystkie()
-                                    .FirstOrDefault(d => d.RodzajDeklaracji == (byte)RodzajDeklaracjiZUS.Zgloszeniowa 
-                                                      && d.StatusWysylki == (byte)StatusWysylkiDeklaracjiZUS.Brak);
+                                    .Where(d => d.RodzajDeklaracji == (byte)RodzajDeklaracjiZUS.Zgloszeniowa 
+                                             && d.StatusWysylki == (byte)StatusWysylkiDeklaracjiZUS.Brak)
+                                    .OrderByDescending(d => d.Id)
+                                    .FirstOrDefault();
 
                                 IDeklaracjaZUS deklBO;
                                 if (existingDecl != null)
@@ -853,6 +970,62 @@ namespace HrAppka_Import_Pracowników
                                             zgloszenie.UmowaPracownicza = freshContract;
                                             zgloszenie.Pracownik = freshEmployee;
                                             zgloszenie.Typ = (byte)TypDeklaracjiZgloszeniowej.ZUA;
+                                            zgloszenie.ImieNazwisko = $"{freshEmployee.Osoba.Imie} {freshEmployee.Osoba.Nazwisko}".ToUpper().Trim();
+
+                                            // Resolve DaneZUA dynamically from InsERT.Moria.API.Private.dll
+                                            Type daneZuaType = null;
+                                            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+                                            {
+                                                daneZuaType = asm.GetType("InsERT.Moria.DeklaracjeZUS.DaneZUA");
+                                                if (daneZuaType != null) break;
+                                            }
+
+                                            if (daneZuaType == null)
+                                            {
+                                                try
+                                                {
+                                                    var privateAsm = System.Reflection.Assembly.LoadFrom(@"C:\ NEXO SDK SFERA\nexoSDK_60.1.1.9292\Bin\InsERT.Moria.API.Private.dll");
+                                                    daneZuaType = privateAsm.GetType("InsERT.Moria.DeklaracjeZUS.DaneZUA");
+                                                }
+                                                catch (Exception ex)
+                                                {
+                                                    LogNexo.Informacja($"Błąd ładowania API.Private.dll dla ZUS: {ex.Message}");
+                                                }
+                                            }
+
+                                            if (daneZuaType != null)
+                                            {
+                                                var daneZUA = Activator.CreateInstance(daneZuaType);
+
+                                                // Set registration type (0 = Zgłoszenie)
+                                                daneZuaType.GetProperty("TYPZgloszenia")?.SetValue(daneZUA, 0);
+                                                
+                                                DateTime obligationDate = freshContract.OkresObowiazywania?.DataPoczatkowa ?? DateTime.Today;
+                                                daneZuaType.GetProperty("DataObowiazkuUbezpieczenSpoleczych")?.SetValue(daneZUA, obligationDate);
+                                                daneZuaType.GetProperty("DataObowiazkuUbezpieczenZdrowotnych")?.SetValue(daneZUA, obligationDate);
+
+                                                // Set contribution flags
+                                                daneZuaType.GetProperty("PlacSkladkaEmerytalna")?.SetValue(daneZUA, freshContract.NaliczaSkladkiEmerytalne);
+                                                daneZuaType.GetProperty("PlacSkladkaRentowa")?.SetValue(daneZUA, freshContract.NaliczaSkladkiRentowe);
+                                                daneZuaType.GetProperty("PlacSkladkaChorobowa")?.SetValue(daneZUA, freshContract.NaliczaSkladkiChorobowe);
+                                                daneZuaType.GetProperty("PlacSkladkaWypadkowa")?.SetValue(daneZUA, freshContract.NaliczaSkladkiWypadkowe);
+
+                                                var wypelnijMethod = deklBO.GetType().GetMethod("WypelnijDeklaracjeZgloszeniona",
+                                                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                                                
+                                                if (wypelnijMethod != null)
+                                                {
+                                                    wypelnijMethod.Invoke(deklBO, new object[] { zgloszenie, daneZUA });
+                                                }
+                                                else
+                                                {
+                                                    item.Ostrzezenia += "Nie odnaleziono metody WypelnijDeklaracjeZgloszeniona. ";
+                                                }
+                                            }
+                                            else
+                                            {
+                                                item.Ostrzezenia += "Nie udało się załadować типу DaneZUA dla ZUS. ";
+                                            }
 
                                             if (!deklBO.Zapisz())
                                             {
@@ -975,5 +1148,268 @@ namespace HrAppka_Import_Pracowników
                 return (OddzialNFZ)Enum.Parse(typeof(OddzialNFZ), "bydgoszcz");
             return null;
         }
+
+        internal static Panstwo? ResolvePanstwo(IUchwyt uchwyt, string inputName, out string platnikCitizenshipName)
+        {
+            platnikCitizenshipName = "";
+            if (string.IsNullOrWhiteSpace(inputName)) return null;
+
+            string normInput = inputName.Trim().ToLower();
+
+            // 1. Search in our static CountryRegistry
+            var countryInfo = CountryRegistry.FirstOrDefault(c => 
+                c.PolishName.Equals(normInput, StringComparison.OrdinalIgnoreCase) || 
+                c.CitizenshipAdjective.Equals(normInput, StringComparison.OrdinalIgnoreCase) ||
+                c.IsoCode.Equals(normInput, StringComparison.OrdinalIgnoreCase)
+            );
+
+            string searchName = normInput;
+            string isoCode = "";
+
+            if (countryInfo != null)
+            {
+                searchName = countryInfo.PolishName;
+                isoCode = countryInfo.IsoCode;
+                platnikCitizenshipName = countryInfo.CitizenshipAdjective;
+            }
+            else
+            {
+                // Fallback guessing
+                platnikCitizenshipName = normInput; // fallback
+            }
+
+            var panstwaMgr = uchwyt.PodajObiektTypu<InsERT.Moria.Klienci.IPanstwa>();
+            
+            // 2. Search database by name
+            var dbPanstwo = panstwaMgr.Dane.Wszystkie().FirstOrDefault(p => 
+                p.Nazwa.Equals(searchName, StringComparison.OrdinalIgnoreCase) || 
+                p.KodPanstwaUE.Equals(searchName, StringComparison.OrdinalIgnoreCase)
+            );
+
+            if (dbPanstwo != null)
+            {
+                return dbPanstwo;
+            }
+
+            // 3. If country is not in database, create it automatically
+            if (!string.IsNullOrEmpty(isoCode))
+            {
+                try
+                {
+                    using (var panstwoBO = panstwaMgr.Utworz())
+                    {
+                        panstwoBO.Dane.Nazwa = searchName;
+                        panstwoBO.Dane.KodPanstwaUE = isoCode;
+                        panstwoBO.Dane.CzlonekUE = false;
+
+                        if (panstwoBO.Zapisz())
+                        {
+                            LogNexo.Informacja($"Utworzono brakujące państwo: {searchName} (ISO: {isoCode})");
+                            return panstwoBO.Dane;
+                        }
+                        else
+                        {
+                            var bledy = uchwyt.PodajBledy(panstwoBO);
+                            var msg = string.Join("; ", bledy.Select(x => x.Tresc));
+                            LogNexo.Informacja($"Błąd zapisu państwa {searchName}: {msg}");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogNexo.Blad(ex);
+                }
+            }
+
+            // Ultimate fallback
+            return panstwaMgr.Dane.Wszystkie().FirstOrDefault(p => p.KodPanstwaUE == "PL");
+        }
+
+        internal static Obywatelstwo? ResolveObywatelstwo(IUchwyt uchwyt, string inputName)
+        {
+            if (string.IsNullOrWhiteSpace(inputName)) return null;
+
+            string platnikName;
+            var panstwo = ResolvePanstwo(uchwyt, inputName, out platnikName);
+            if (panstwo == null) return null;
+
+            if (string.IsNullOrEmpty(platnikName))
+            {
+                platnikName = panstwo.Nazwa.ToLower() + "skie"; // fallback guess
+            }
+
+            var obywatelstwaMgr = uchwyt.PodajObiektTypu<InsERT.Moria.Klienci.IObywatelstwa>();
+            
+            // 1. Search existing citizenship in DB
+            var dbObywatelstwo = obywatelstwaMgr.Dane.Wszystkie().FirstOrDefault(o => 
+                o.Nazwa.Equals(platnikName, StringComparison.OrdinalIgnoreCase) || 
+                (o.Panstwo != null && o.Panstwo.Id == panstwo.Id)
+            );
+
+            if (dbObywatelstwo != null)
+            {
+                return dbObywatelstwo;
+            }
+
+            // 2. If not found, create new citizenship in DB
+            try
+            {
+                using (var obyBO = obywatelstwaMgr.Utworz())
+                {
+                    obyBO.Dane.Nazwa = platnikName;
+                    obyBO.Dane.Panstwo = panstwo;
+
+                    if (obyBO.Zapisz())
+                    {
+                        LogNexo.Informacja($"Utworzono brakujące obywatelstwo: {platnikName}");
+                        return obyBO.Dane;
+                    }
+                    else
+                    {
+                        var bledy = uchwyt.PodajBledy(obyBO);
+                        var msg = string.Join("; ", bledy.Select(x => x.Tresc));
+                        LogNexo.Informacja($"Błąd zapisu obywatelstwa {platnikName}: {msg}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LogNexo.Blad(ex);
+            }
+
+            return null;
+        }
+
+        private static string CleanAndStemUs(string input)
+        {
+            if (string.IsNullOrWhiteSpace(input)) return "";
+            
+            var stopWords = new HashSet<string> { "urzad", "skarbowy", "w", "we", "us", "podatkowy", "izba", "dla" };
+            
+            var words = input.ToLower().Split(new[] { ' ', '-', '/' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(w => w.Replace("ą", "a").Replace("ć", "c").Replace("ę", "e")
+                              .Replace("ł", "l").Replace("ń", "n").Replace("ó", "o")
+                              .Replace("ś", "s").Replace("ź", "z").Replace("ż", "z"))
+                .Where(w => !stopWords.Contains(w))
+                .Select(w => {
+                    w = w.Replace("pierwszy", "1").Replace("drugi", "2").Replace("trzeci", "3");
+                    return w.Length > 4 ? w.Substring(0, 4) : w;
+                });
+
+            return string.Join("", words);
+        }
+
+        internal static OrganPodatkowy? ResolveOrganPodatkowy(IUchwyt uchwyt, string usName)
+        {
+            if (string.IsNullOrWhiteSpace(usName)) return null;
+
+            string stemName = CleanAndStemUs(usName);
+            if (string.IsNullOrEmpty(stemName)) return null;
+
+            // 1. Search existing OrganPodatkowy in the customer database
+            var localUS = uchwyt.Podmioty().Dane.WszystkieOrganyPodatkowe()
+                .AsEnumerable()
+                .FirstOrDefault(o => o.Firma != null && 
+                                     (CleanAndStemUs(o.Firma.Nazwa) == stemName || 
+                                      CleanAndStemUs(o.NazwaSkrocona) == stemName));
+
+            if (localUS != null)
+            {
+                return localUS.Firma.OrganPodatkowy;
+            }
+
+            // 2. Search built-in template database using DbContext
+            try
+            {
+                var podmiotyMgr = uchwyt.Podmioty();
+                
+                string kod = null;
+                string templateNazwa = null;
+                
+                using (var bo = podmiotyMgr.UtworzPracownika())
+                {
+                    var getUow = (InsERT.Mox.BusinessObjects.IGetUnitOfWork)bo;
+                    var scope = (InsERT.Mox.Runtime.IInjectionScope)getUow.UnitOfWork;
+                    var context = (ModelDanychContainer)scope.ScopedContainer.GetObject(typeof(ModelDanychContainer));
+                    
+                    var templateUS = context.UrzedySkarbowe
+                        .AsEnumerable()
+                        .FirstOrDefault(t => t.Nazwa != null && CleanAndStemUs(t.Nazwa) == stemName);
+
+                    if (templateUS != null)
+                    {
+                        kod = templateUS.Kod;
+                        templateNazwa = templateUS.Nazwa;
+                    }
+                }
+
+                if (kod != null)
+                {
+                    // 3. Create a new OrganPodatkowy based on the 4-digit code
+                    using (var organBO = podmiotyMgr.UtworzOrganPodatkowy())
+                    {
+                        var organ = (IOrganPodatkowy)organBO;
+                        if (organ.WypelnijDlaKodu(kod))
+                        {
+                            organBO.AutoSymbol();
+                            if (organBO.Zapisz())
+                            {
+                                LogNexo.Informacja($"Utworzono brakujący urząd skarbowy: {templateNazwa} (Kod: {kod})");
+                                return organBO.Dane.Firma.OrganPodatkowy;
+                            }
+                            else
+                            {
+                                var bledy = uchwyt.PodajBledy(organBO);
+                                var msg = string.Join("; ", bledy.Select(x => x.Tresc));
+                                LogNexo.Informacja($"Błąd zapisu urzędu skarbowego {templateNazwa}: {msg}");
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ResolveOrganPodatkowy ERROR]: {ex}");
+                LogNexo.Blad(ex);
+            }
+
+            return null;
+        }
+
+        private class CountryInfo
+        {
+            public string PolishName { get; }
+            public string IsoCode { get; }
+            public string CitizenshipAdjective { get; }
+
+            public CountryInfo(string polishName, string isoCode, string citizenshipAdjective)
+            {
+                PolishName = polishName;
+                IsoCode = isoCode;
+                CitizenshipAdjective = citizenshipAdjective;
+            }
+        }
+
+        private static readonly List<CountryInfo> CountryRegistry = new List<CountryInfo>
+        {
+            new CountryInfo("Polska", "PL", "polskie"),
+            new CountryInfo("Ukraina", "UA", "ukraińskie"),
+            new CountryInfo("Białoruś", "BY", "białoruskie"),
+            new CountryInfo("Gruzja", "GE", "gruzińskie"),
+            new CountryInfo("Mołdawia", "MD", "mołdawskie"),
+            new CountryInfo("Rosja", "RU", "rosyjskie"),
+            new CountryInfo("Paragwaj", "PY", "paragwajskie"),
+            new CountryInfo("Zimbabwe", "ZW", "zimbabwe"),
+            new CountryInfo("Indie", "IN", "indyjskie"),
+            new CountryInfo("Wietnam", "VN", "wietnamskie"),
+            new CountryInfo("Kazachstan", "KZ", "kazachskie"),
+            new CountryInfo("Uzbekistan", "UZ", "uzbeckie"),
+            new CountryInfo("Armenia", "AM", "armeńskie"),
+            new CountryInfo("Filipiny", "PH", "filipińskie"),
+            new CountryInfo("Niemcy", "DE", "niemieckie"),
+            new CountryInfo("Czechy", "CZ", "czeskie"),
+            new CountryInfo("Słowacja", "SK", "słowackie"),
+            new CountryInfo("Turcja", "TR", "tureckie")
+        };
     }
 }
