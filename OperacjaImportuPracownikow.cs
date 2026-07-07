@@ -242,6 +242,74 @@ namespace HrAppka_Import_Pracowników
             LogNexo.Informacja($"Podsumowanie importu: {sb}");
         }
 
+        private void SprawdzIstniejacyPracownikUmowy(IUchwyt uchwyt, Podmiot existingOsoba, PracownikImportRow row)
+        {
+            if (existingOsoba != null && existingOsoba.Osoba?.Pracownik != null)
+            {
+                int employeeId = existingOsoba.Osoba.Pracownik.Id;
+                DateTime? targetStartDate = null;
+                if (!string.IsNullOrWhiteSpace(row.DataRozpoczecia) && DateTime.TryParse(row.DataRozpoczecia, out DateTime dtStart))
+                {
+                    targetStartDate = dtStart;
+                }
+
+                bool contractExists = false;
+                if (targetStartDate.HasValue)
+                {
+                    try
+                    {
+                        var umowyMgr = uchwyt.UmowyPracowniczeGr();
+                        var query = (System.Collections.IEnumerable)umowyMgr.Dane.Wszystkie();
+                        foreach (dynamic u in query)
+                        {
+                            try
+                            {
+                                if (u.Pracownik != null && u.Pracownik.Id == employeeId &&
+                                    u.OkresObowiazywania != null && u.OkresObowiazywania.DataPoczatkowa == targetStartDate.Value)
+                                {
+                                    string defName = "";
+                                    try { defName = u.TypUmowyPracowniczej?.TypUmowyPracowniczejDlaKtoregoAktualny?.Nazwa ?? ""; } catch {}
+                                    if (string.IsNullOrEmpty(defName))
+                                    {
+                                        try { defName = u.TypUmowyPracowniczej?.TypUmowyPracowniczejDlaKtoregoHistoria?.Nazwa ?? ""; } catch {}
+                                    }
+                                    if (defName.Equals("Umowa zlecenie", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        contractExists = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            catch
+                            {
+                                // Ignore inner dynamic evaluation exception
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        LogNexo.Informacja($"Błąd sprawdzania umowy: {ex.Message}");
+                    }
+                }
+
+                if (contractExists)
+                {
+                    row.Status = "Aktualizacja (Dane)";
+                    row.Ostrzezenia += "Pracownik i umowa o tej dacie rozpoczęcia już istnieją. Zostaną zaktualizowane tylko dane kartoteki. ";
+                }
+                else
+                {
+                    row.Status = "Aktualizacja (Nowa umowa)";
+                    row.Ostrzezenia += "Pracownik już istnieje, zostanie dodana nowa umowa. ";
+                }
+            }
+            else
+            {
+                row.Status = "Aktualizacja (Nowa umowa)";
+                row.Ostrzezenia += "Osoba istnieje w Nexo, zostanie przekształcona w pracownika i dodana nowa umowa. ";
+            }
+        }
+
         private void PreAnalyzeRows(IUchwyt uchwyt, List<PracownikImportRow> rows)
         {
             var podmioty = uchwyt.Podmioty();
@@ -268,8 +336,9 @@ namespace HrAppka_Import_Pracowników
                     {
                         if (existingPassports.Contains(row.Paszport))
                         {
-                            row.Ostrzezenia += "Pracownik o tym Paszporcie już istnieje. ";
-                            row.Status = "Pominięty (Już istnieje)";
+                            var existingOsoba = podmioty.Dane.WszystkieOsoby()
+                                .FirstOrDefault(p => p.Osoba != null && p.Osoba.SeriaINumerDokumentuTozsamosci == row.Paszport);
+                            SprawdzIstniejacyPracownikUmowy(uchwyt, existingOsoba, row);
                         }
                         else
                         {
@@ -308,8 +377,9 @@ namespace HrAppka_Import_Pracowników
 
                     if (existingPesels.Contains(row.Pesel))
                     {
-                        row.Ostrzezenia += "Pracownik o tym PESEL już istnieje. ";
-                        row.Status = "Pominięty (Już istnieje)";
+                        var existingOsoba = podmioty.Dane.WszystkieOsoby()
+                            .FirstOrDefault(p => p.Osoba != null && p.Osoba.PESEL == row.Pesel);
+                        SprawdzIstniejacyPracownikUmowy(uchwyt, existingOsoba, row);
                     }
                 }
 
@@ -656,7 +726,11 @@ namespace HrAppka_Import_Pracowników
                 }
 
                 // Civil Contract
-                if (!string.IsNullOrWhiteSpace(item.TypUmowy) && !string.IsNullOrWhiteSpace(item.DataRozpoczecia))
+                if (item.Status == "Aktualizacja (Dane)")
+                {
+                    LogNexo.Informacja($"Pominięto tworzenie umowy i zgłoszenia ZUS dla {item.Imie} {item.Nazwisko} - umowa już istnieje.");
+                }
+                else if (!string.IsNullOrWhiteSpace(item.TypUmowy) && !string.IsNullOrWhiteSpace(item.DataRozpoczecia))
                 {
                     if (!DateTime.TryParse(item.DataRozpoczecia, out DateTime startDate))
                     {
