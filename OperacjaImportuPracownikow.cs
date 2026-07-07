@@ -174,6 +174,72 @@ namespace HrAppka_Import_Pracowników
             PreAnalyzeRows(kontekstOperacji.Uchwyt, rows);
 
             okno.Pokaz(rows, x => ZaimportujRow(kontekstOperacji, x));
+
+            // Show summary after import completes
+            PokazPodsumowanieImportu(kontekstOperacji, rows);
+        }
+
+        private void PokazPodsumowanieImportu(IKontekstOperacji kontekstOperacji, List<PracownikImportRow> rows)
+        {
+            var zaimportowani = rows.Where(r => r.Status.StartsWith("Zakończon") || r.Status == "Gotowy" || r.Status == "Gotowy (Cudzoziemiec)").ToList();
+            var pominieci = rows.Where(r => r.Status.StartsWith("Pominięty") || r.Status.StartsWith("Pomini")).ToList();
+            var bledy = rows.Where(r => r.Status.StartsWith("Błąd") || r.Status.StartsWith("Bl") || r.Ostrzezenia.Contains("błąd") || r.Ostrzezenia.Contains("Błąd")).ToList();
+            var zOstrzezeniami = rows.Where(r => !string.IsNullOrEmpty(r.Ostrzezenia) && !pominieci.Contains(r) && !bledy.Contains(r)).ToList();
+
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine($"Łącznie wierszy: {rows.Count}");
+            sb.AppendLine($"Zaimportowano: {zaimportowani.Count}");
+            sb.AppendLine($"Pominięto (już istnieją): {pominieci.Count}");
+            if (bledy.Count > 0)
+                sb.AppendLine($"Błędy: {bledy.Count}");
+            if (zOstrzezeniami.Count > 0)
+                sb.AppendLine($"Z ostrzeżeniami: {zOstrzezeniami.Count}");
+
+            if (pominieci.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("--- Pominięci pracownicy (już istnieją) ---");
+                foreach (var p in pominieci)
+                {
+                    sb.AppendLine($"  • {p.Nazwisko} {p.Imie} | PESEL: {p.Pesel} | Umowa: {p.OpisUmowy}");
+                }
+            }
+
+            if (bledy.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("--- Błędy ---");
+                foreach (var p in bledy)
+                {
+                    sb.AppendLine($"  • {p.Nazwisko} {p.Imie} | {p.Status} | {p.Ostrzezenia}");
+                }
+            }
+
+            if (zOstrzezeniami.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("--- Z ostrzeżeniami ---");
+                foreach (var p in zOstrzezeniami)
+                {
+                    sb.AppendLine($"  • {p.Nazwisko} {p.Imie} | {p.Ostrzezenia}");
+                }
+            }
+
+            try
+            {
+                Okna.PokazOknoZInformacja(kontekstOperacji.Uchwyt, sb.ToString());
+            }
+            catch
+            {
+                // Fallback if PokazOknoZInformacja doesn't exist or fails
+                try
+                {
+                    System.Windows.MessageBox.Show(sb.ToString(), "Podsumowanie importu", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                }
+                catch { /* ignore UI errors */ }
+            }
+
+            LogNexo.Informacja($"Podsumowanie importu: {sb}");
         }
 
         private void PreAnalyzeRows(IUchwyt uchwyt, List<PracownikImportRow> rows)
@@ -830,6 +896,62 @@ namespace HrAppka_Import_Pracowników
                                             zgloszenie.UmowaPracownicza = freshContract;
                                             zgloszenie.Pracownik = freshEmployee;
                                             zgloszenie.Typ = (byte)TypDeklaracjiZgloszeniowej.ZUA;
+                                            zgloszenie.ImieNazwisko = $"{freshEmployee.Osoba.Imie} {freshEmployee.Osoba.Nazwisko}".ToUpper().Trim();
+
+                                            // Resolve DaneZUA dynamically from InsERT.Moria.API.Private.dll
+                                            Type daneZuaType = null;
+                                            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+                                            {
+                                                daneZuaType = asm.GetType("InsERT.Moria.DeklaracjeZUS.DaneZUA");
+                                                if (daneZuaType != null) break;
+                                            }
+
+                                            if (daneZuaType == null)
+                                            {
+                                                try
+                                                {
+                                                    var privateAsm = System.Reflection.Assembly.LoadFrom(@"C:\ NEXO SDK SFERA\nexoSDK_60.1.1.9292\Bin\InsERT.Moria.API.Private.dll");
+                                                    daneZuaType = privateAsm.GetType("InsERT.Moria.DeklaracjeZUS.DaneZUA");
+                                                }
+                                                catch (Exception ex)
+                                                {
+                                                    LogNexo.Informacja($"Błąd ładowania API.Private.dll dla ZUS: {ex.Message}");
+                                                }
+                                            }
+
+                                            if (daneZuaType != null)
+                                            {
+                                                var daneZUA = Activator.CreateInstance(daneZuaType);
+
+                                                // Set registration type (0 = Zgłoszenie)
+                                                daneZuaType.GetProperty("TYPZgloszenia")?.SetValue(daneZUA, 0);
+                                                
+                                                DateTime obligationDate = freshContract.OkresObowiazywania?.DataPoczatkowa ?? DateTime.Today;
+                                                daneZuaType.GetProperty("DataObowiazkuUbezpieczenSpoleczych")?.SetValue(daneZUA, obligationDate);
+                                                daneZuaType.GetProperty("DataObowiazkuUbezpieczenZdrowotnych")?.SetValue(daneZUA, obligationDate);
+
+                                                // Set contribution flags
+                                                daneZuaType.GetProperty("PlacSkladkaEmerytalna")?.SetValue(daneZUA, freshContract.NaliczaSkladkiEmerytalne);
+                                                daneZuaType.GetProperty("PlacSkladkaRentowa")?.SetValue(daneZUA, freshContract.NaliczaSkladkiRentowe);
+                                                daneZuaType.GetProperty("PlacSkladkaChorobowa")?.SetValue(daneZUA, freshContract.NaliczaSkladkiChorobowe);
+                                                daneZuaType.GetProperty("PlacSkladkaWypadkowa")?.SetValue(daneZUA, freshContract.NaliczaSkladkiWypadkowe);
+
+                                                var wypelnijMethod = deklBO.GetType().GetMethod("WypelnijDeklaracjeZgloszeniona",
+                                                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                                                
+                                                if (wypelnijMethod != null)
+                                                {
+                                                    wypelnijMethod.Invoke(deklBO, new object[] { zgloszenie, daneZUA });
+                                                }
+                                                else
+                                                {
+                                                    item.Ostrzezenia += "Nie odnaleziono metody WypelnijDeklaracjeZgloszeniona. ";
+                                                }
+                                            }
+                                            else
+                                            {
+                                                item.Ostrzezenia += "Nie udało się załadować типу DaneZUA dla ZUS. ";
+                                            }
 
                                             if (!deklBO.Zapisz())
                                             {
