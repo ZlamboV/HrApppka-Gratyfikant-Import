@@ -1,12 +1,35 @@
 using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Linq;
 using InsERT.Moria.Raporty;
+using MiniExcelLibs.Attributes;
 
 namespace HrAppka_Import_Pracowników
 {
+    public enum DecyzjaIstniejacyPracownik { AktualizujKartotekeIDodajUmowe, TylkoDodajUmowe, NadpiszUmowe, PominWiersz }
     public class PracownikImportRow : INotifyPropertyChanged, IDataErrorInfo
     {
+        [Browsable(false)]
+        [BezKolumny]
+        [ExcelColumnName("Pracownik")]
+        public string PracownikCol { get; set; } = "";
+
+        [Browsable(false)]
+        [BezKolumny]
+        public DateTime? ResolvedBirthDate { get; set; }
+
+        [Browsable(false)]
+        [BezKolumny]
+        public string? ResolvedGender { get; set; }
+
+        [Browsable(false)]
+        [BezKolumny]
+        public InsERT.Moria.ModelDanych.OrganPodatkowy? SelectedOrganPodatkowy { get; set; }
+
+        [Browsable(false)]
+        [BezKolumny]
+        public DecyzjaIstniejacyPracownik DecyzjaDlaIstniejacego { get; set; } = DecyzjaIstniejacyPracownik.AktualizujKartotekeIDodajUmowe;
         private string imie = "";
         private string drugieImie = "";
         private string nazwisko = "";
@@ -345,14 +368,10 @@ namespace HrAppka_Import_Pracowników
             return true;
         }
 
-        // WPF Validation (IDataErrorInfo)
-        [Browsable(false)]
-        [BezKolumny]
-        public string? Error => null;
+        // WPF Validation (IDataErrorInfo) Explicit Interface Implementation
+        string? IDataErrorInfo.Error => null;
 
-        [Browsable(false)]
-        [BezKolumny]
-        public string? this[string columnName]
+        string? IDataErrorInfo.this[string columnName]
         {
             get
             {

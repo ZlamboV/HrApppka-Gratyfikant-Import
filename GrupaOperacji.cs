@@ -17,7 +17,8 @@ namespace HrAppka_Import_Pracowników
 
         public IEnumerable<Operacja> Operacje { get; } = new Operacja[]
         {
-            new OperacjaImportuPracownikow()
+            new OperacjaImportuPracownikow20()
         };
     }
 }
+

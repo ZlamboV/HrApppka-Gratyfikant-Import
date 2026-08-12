@@ -20,7 +20,7 @@ class Program
         AssemblyLoadContext.Default.Resolving += (context, name) =>
         {
             string assemblyName = name.Name;
-            string path = Path.Combine(@"C:\ NEXO SDK SFERA\nexoSDK_60.1.1.9292\Bin", assemblyName + ".dll");
+            string path = Path.Combine(@"C:\Users\zasc2\AppData\Local\InsERT\Deployments\Nexo\KLINEX SP_Z_O_Oa4bfb87390e94eea9\Binaries", assemblyName + ".dll");
             if (File.Exists(path))
             {
                 return context.LoadFromAssemblyPath(path);
@@ -43,6 +43,7 @@ class Program
             try
             {
                 AutoInstaller.Install();
+                Console.WriteLine("Installation finished cleanly. Exiting process.");
             }
             catch (Exception ex)
             {
@@ -54,6 +55,7 @@ class Program
                     Console.WriteLine(ex.InnerException.StackTrace);
                 }
             }
+            Environment.Exit(0);
             return;
         }
 
@@ -202,28 +204,65 @@ class AutoInstaller
         bool wyslany = launchdb.UploadPackage(pakiet, true);
         Console.WriteLine($"Wynik wysłania pakietu: {(wyslany ? "Sukces" : "Pakiet już istnieje lub błąd")}");
 
-        // 4. Update deployment manifest in the target database
+        // 4. Update deployment manifest in the target database (always replace old versions of this plugin)
         Console.WriteLine($"Łączenie z bazą podmiotu: {bazaDanych}...");
         var sqldb = new InsERT.Mox.Launcher.SqlDatabase(csbPodmiot.ConnectionString);
 
         Console.WriteLine("Pobieranie aktualnego manifestu wdrożenia dla Nexo...");
         var dm = sqldb.GetDeploymentManifest("Nexo");
 
-        Console.WriteLine("Sprawdzanie czy pakiet jest już podłączony...");
-        if (!dm.AdditionalPackages.Contains(ident))
-        {
-            //aktualizujemy manifest - usuwamy starsze wersje o tej samej nazwie przed dodaniem nowej
-            var nowePakiety = dm.AdditionalPackages
-                .Where(p => !p.Name.Equals(ident.Name, StringComparison.OrdinalIgnoreCase))
-                .Concat(new[] { ident });
+        Console.WriteLine("Zapewnianie aktualności manifestu wdrożenia...");
+        var nowePakiety = dm.AdditionalPackages
+            .Where(p => !p.Name.Equals(ident.Name, StringComparison.OrdinalIgnoreCase))
+            .Concat(new[] { ident });
 
-            dm = new InsERT.Mox.Launcher.DeploymentManifest(dm.Product, dm.DeploymentName, nowePakiety);
-            sqldb.WriteDeploymentManifest(dm, true);
-            Console.WriteLine("Manifest został pomyślnie zaktualizowany. Instalacja zakończona sukcesem!");
-        }
-        else
+        dm = new InsERT.Mox.Launcher.DeploymentManifest(dm.Product, dm.DeploymentName, nowePakiety);
+        sqldb.WriteDeploymentManifest(dm, true);
+        Console.WriteLine("Manifest został pomyślnie zaktualizowany.");
+
+        // 5. Automatic local binaries synchronization & file-lock release
+        SyncLocalDeploymentBinaries(pakietFolder);
+        Console.WriteLine("Instalacja oraz synchronizacja plików zakończona sukcesem!");
+    }
+
+    private static void SyncLocalDeploymentBinaries(string sourceDllDir)
+    {
+        Console.WriteLine("Automatyczne zwalnianie blokad plików i synchronizacja бінаріїв...");
+        try
         {
-            Console.WriteLine("Pakiet o tej tożsamości jest już podłączony do podmiotu. Pomijam aktualizację manifestu.");
+            var nexoProcs = System.Diagnostics.Process.GetProcessesByName("Nexo");
+            foreach (var proc in nexoProcs)
+            {
+                Console.WriteLine($"Zamknięcie procesu Nexo.exe (PID {proc.Id}) w celu zwolnienia blokady plików...");
+                try { proc.Kill(); proc.WaitForExit(3000); } catch { }
+            }
+
+            string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            string nexoDeployRoot = Path.Combine(localAppData, "InsERT", "Deployments", "Nexo");
+
+            if (Directory.Exists(nexoDeployRoot))
+            {
+                foreach (var dir in Directory.GetDirectories(nexoDeployRoot))
+                {
+                    string binDir = Path.Combine(dir, "Binaries");
+                    if (Directory.Exists(binDir))
+                    {
+                        string sourceDll = Path.Combine(sourceDllDir, "HrAppka_Import_Pracowników.dll");
+                        string sourcePlugin = Path.Combine(sourceDllDir, "HrAppka_Import_Pracowników.plugin");
+                        string sourceMini = Path.Combine(sourceDllDir, "MiniExcel.dll");
+
+                        if (File.Exists(sourceDll)) File.Copy(sourceDll, Path.Combine(binDir, "HrAppka_Import_Pracowników.dll"), true);
+                        if (File.Exists(sourcePlugin)) File.Copy(sourcePlugin, Path.Combine(binDir, "HrAppka_Import_Pracowników.plugin"), true);
+                        if (File.Exists(sourceMini)) File.Copy(sourceMini, Path.Combine(binDir, "MiniExcel.dll"), true);
+
+                        Console.WriteLine($"Pomyślnie zsynchronizowano pliki w katalogu: {Path.GetFileName(dir)}");
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Ostrzeżenie] Błąd synchronizacji lokalnych plików: {ex.Message}");
         }
     }
 
@@ -350,112 +389,204 @@ class AutoInstaller
 
 class SferaRunner
 {
-    public static void Execute()
+    public static void Execute(string? excelPath = null)
     {
-        LogNexo.Informacja("Rozpoczęto diagnostyczny test urzędów skarbowych");
+        if (string.IsNullOrWhiteSpace(excelPath))
+        {
+            excelPath = @"C:\Users\zasc2\Downloads\Telegram Desktop\Eksport - Umowy - ANDROS.xlsx";
+        }
+
+        Console.WriteLine($"=== AUTONOMOUS SFERA SDK IMPORT TEST ===");
+        Console.WriteLine($"Target Excel File: {excelPath}");
+
+        if (!File.Exists(excelPath))
+        {
+            Console.WriteLine($"[ERROR] Excel file not found: {excelPath}");
+            return;
+        }
 
         using (InsERT.Moria.Sfera.Uchwyt uchwyt = UruchomSfere())
         {
-            var testCases = new[] { 
-                "Drugi Urząd Skarbowy w Opolu", 
-                "Urząd Skarbowy Kraków-Krowodrza", 
-                "Urząd Skarbowy Warszawa-Śródmieście" 
-            };
+            Console.WriteLine("[SDK] Connected to Sfera. Reading Excel file...");
+            var rows = OperacjaImportuPracownikow20.WczytajExcel(excelPath);
+            Console.WriteLine($"[SDK] Loaded {rows.Count} rows from Excel.");
 
-            foreach (var testCase in testCases)
+            Console.WriteLine("[SDK] Running pre-analysis against Nexo database...");
+            OperacjaImportuPracownikow20.PreAnalyzeRows(uchwyt, rows);
+
+            int success = 0;
+            int failed = 0;
+
+            for (int i = 0; i < rows.Count; i++)
             {
-                Console.WriteLine($"\n--- TESTING TAX OFFICE: {testCase} ---");
+                var row = rows[i];
+                Console.WriteLine($"\n--- Processing Row [{i + 1}/{rows.Count}]: {row.Imie} {row.Nazwisko} (PESEL: {row.Pesel}, Paszport: {row.Paszport}) ---");
+                Console.WriteLine($"  * Adres Ulica: '{row.Ulica}', Dom: '{row.NrDomu}', Miasto: '{row.Miejscowosc}'");
+                Console.WriteLine($"  * Obywatelstwo: '{row.Obywatelstwo}'");
+
                 try
                 {
-                    var organ = HrAppka_Import_Pracowników.OperacjaImportuPracownikow.ResolveOrganPodatkowy(uchwyt, testCase);
-                    if (organ != null)
+                    var result = OperacjaImportuPracownikow20.ZaimportujRow20(null!, row);
+                    Console.WriteLine($"  * Result Status: {row.Status}");
+                    if (!string.IsNullOrWhiteSpace(row.Ostrzezenia))
                     {
-                        Console.WriteLine($"SUCCESS: Resolved to OrganPodatkowy: '{organ.Firma.Nazwa}'");
+                        Console.WriteLine($"  * Warnings: {row.Ostrzezenia}");
+                    }
+
+                    if (row.Status == "Import zakończony sukcesem")
+                    {
+                        success++;
                     }
                     else
                     {
-                        Console.WriteLine("FAILURE: ResolveOrganPodatkowy returned null!");
+                        failed++;
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"EXCEPTION during test: {ex.Message}");
-                    if (ex.InnerException != null)
-                        Console.WriteLine($"  Inner Exception: {ex.InnerException.Message}");
+                    failed++;
+                    Console.WriteLine($"  * EXCEPTION: {ex.Message}");
+                    LogNexo.Blad(ex);
                 }
             }
+
+            Console.WriteLine($"\n=== TEST RUN COMPLETE ===");
+            Console.WriteLine($"Total Rows: {rows.Count} | Success: {success} | Failed: {failed}");
         }
-        LogNexo.Informacja("Zakończono diagnostyczny test urzędów skarbowych");
-    }
-
-    static void WypiszBledy(Uchwyt sfera, IObiektBiznesowy bo)
-    {
-        Console.WriteLine("=== ENTITY VALIDATION ERRORS ===");
-        var bledy = sfera.PodajBledy(bo);
-        foreach (var err in bledy)
-        {
-            Console.WriteLine($"  - [{err.Waznosc}] {err.Tresc}");
-        }
-    }
-
-    static string GetVal(IDictionary<string, object> dict, string key)
-    {
-        string normKey = NormalizeKey(key);
-        foreach (var k in dict.Keys)
-        {
-            if (NormalizeKey(k) == normKey)
-            {
-                return dict[k]?.ToString()?.Trim() ?? "";
-            }
-        }
-        return "";
-    }
-
-    static string NormalizeKey(string key)
-    {
-        return key.ToLower()
-                  .Replace("ą", "a").Replace("ć", "c").Replace("ę", "e")
-                  .Replace("ł", "l").Replace("ń", "n").Replace("ó", "o")
-                  .Replace("ś", "s").Replace("ź", "z").Replace("ż", "z")
-                  .Replace(" ", "").Replace("-", "").Replace("/", "");
-    }
-
-    static byte GetPlec(string plecStr)
-    {
-        if (string.IsNullOrWhiteSpace(plecStr)) return 0;
-        string lower = plecStr.ToLower();
-        if (lower.Contains("kob") || lower.Contains("fem")) return 1;
-        if (lower.Contains("męż") || lower.Contains("mez") || lower.Contains("mal")) return 2;
-        return 0;
-    }
-
-    static Panstwo ZnajdzPanstwo(Uchwyt uchwyt, string name)
-    {
-        if (string.IsNullOrWhiteSpace(name)) name = "Polska";
-        string norm = name.ToUpper();
-        var p = uchwyt.Panstwa().Dane.Wszystkie().FirstOrDefault(x => x.Nazwa.ToUpper() == norm || x.KodPanstwaUE.ToUpper() == norm);
-        if (p == null)
-        {
-            p = uchwyt.Panstwa().Dane.Wszystkie().FirstOrDefault(x => x.Nazwa.ToUpper() == "POLSKA");
-        }
-        return p!;
     }
 
     static InsERT.Moria.Sfera.Uchwyt UruchomSfere()
     {
         string server = "100.127.240.115\\INSERTGT"; 
-        string baza = "Nexo_Test_GR"; 
+        string baza = "Nexo_Test_1"; 
         string sqlPassword = ""; 
 
+        string paramFile = @"C:\ NEXO SDK SFERA\HrAppka Import Pracowników\ParametryInstalacji.txt";
+        if (File.Exists(paramFile))
+        {
+            var lines = File.ReadAllLines(paramFile);
+            foreach (var line in lines)
+            {
+                var parts = line.Split('=', 2);
+                if (parts.Length == 2)
+                {
+                    string key = parts[0].Trim();
+                    string val = parts[1].Trim();
+                    if (key.Equals("Serwer", StringComparison.OrdinalIgnoreCase)) server = val;
+                    if (key.Equals("BazaDanych", StringComparison.OrdinalIgnoreCase)) baza = val;
+                    if (key.Equals("Haslo", StringComparison.OrdinalIgnoreCase)) sqlPassword = val;
+                }
+            }
+        }
+
+        Console.WriteLine($"[Sfera] Connecting to Server: '{server}', Database: '{baza}'...");
         var danePolaczenia = InsERT.Moria.Sfera.DanePolaczenia.Jawne(server, baza, false, "sa", sqlPassword);
+        
+        foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+        {
+            if (asm.FullName.Contains("Moria"))
+            {
+                var tUzytkownicy = asm.GetType("InsERT.Moria.Uzytkownicy.IUzytkownicy");
+                if (tUzytkownicy != null)
+                {
+                    Console.WriteLine($"[IUzytkownicy Interface] {tUzytkownicy.FullName}");
+                    foreach (var m in tUzytkownicy.GetMethods())
+                    {
+                        var ps = string.Join(", ", Array.ConvertAll(m.GetParameters(), p => $"{p.ParameterType.Name} {p.Name}"));
+                        Console.WriteLine($"   Method: {m.ReturnType.Name} {m.Name}({ps})");
+                    }
+                }
+
+                var tUzytkownik = asm.GetType("InsERT.Moria.Uzytkownicy.IUzytkownik");
+                if (tUzytkownik != null)
+                {
+                    Console.WriteLine($"[IUzytkownik Interface] {tUzytkownik.FullName}");
+                    foreach (var m in tUzytkownik.GetMethods())
+                    {
+                        var ps = string.Join(", ", Array.ConvertAll(m.GetParameters(), p => $"{p.ParameterType.Name} {p.Name}"));
+                        Console.WriteLine($"   Method: {m.ReturnType.Name} {m.Name}({ps})");
+                    }
+                }
+            }
+        }
         var mp = new InsERT.Moria.Sfera.MenedzerPolaczen();
         var sfera = mp.Polacz(danePolaczenia, InsERT.Mox.Product.ProductId.Gratyfikant);
         
-        if (!sfera.ZalogujOperatora("Szef", "robocze"))
+        foreach (var m in sfera.GetType().GetMethods())
         {
-            throw new ArgumentException("Niepoprawny operator.");
+            var ps = string.Join(", ", Array.ConvertAll(m.GetParameters(), p => p.ParameterType.Name + " " + p.Name));
+            Console.WriteLine($"[Sfera Uchwyt Method] {m.ReturnType.Name} {m.Name}({ps})");
         }
         
+        try
+        {
+            var testPracownicy = sfera.PodajObiektTypu<InsERT.Moria.Klienci.IPodmioty>();
+            Console.WriteLine($"[Sfera] SUCCESS! PodajObiektTypu<IPodmioty>() returned non-null: {testPracownicy != null}");
+            return sfera;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Sfera] PodajObiektTypu before Zaloguj failed: {ex.Message}");
+        }
+
+        Guid szefGuid = Guid.Parse("745a2355-ec3a-4706-9f62-f9bdec840c0e");
+        
+        try
+        {
+            if (sfera.ZalogujOperatora("Szef", ""))
+            {
+                Console.WriteLine("[Sfera] SUCCESS! ZalogujOperatora('Szef', '') succeeded!");
+                return sfera;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Sfera] ZalogujOperatora('Szef', '') failed: {ex.Message}");
+        }
+
+        try
+        {
+            if (sfera.ZalogujOperatora("Szef", null))
+            {
+                Console.WriteLine("[Sfera] SUCCESS! ZalogujOperatora('Szef', null) succeeded!");
+                return sfera;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Sfera] ZalogujOperatora('Szef', null) failed: {ex.Message}");
+        }
+
+        try
+        {
+            var r1 = sfera.Zaloguj("Szef", "");
+            Console.WriteLine($"[Sfera] Zaloguj('Szef', '') -> {r1}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Sfera] Zaloguj('Szef', '') failed: {ex.Message}");
+        }
+
+        try
+        {
+            var r2 = sfera.Zaloguj("Szef", null);
+            Console.WriteLine($"[Sfera] Zaloguj('Szef', null) -> {r2}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Sfera] Zaloguj('Szef', null) failed: {ex.Message}");
+        }
+
+        try
+        {
+            var r3 = sfera.Zaloguj(szefGuid, "");
+            Console.WriteLine($"[Sfera] Zaloguj(Guid, '') -> {r3}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Sfera] Zaloguj(Guid, '') failed: {ex.Message}");
+        }
+
         return sfera;
     }
 }
