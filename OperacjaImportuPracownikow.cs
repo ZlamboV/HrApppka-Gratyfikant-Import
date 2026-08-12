@@ -84,53 +84,53 @@ namespace HrAppka_Import_Pracowników
         private List<PracownikImportRow> WczytajExcel(string sciezka)
         {
             var rows = new List<PracownikImportRow>();
-            var excelData = MiniExcel.Query(sciezka, useHeaderRow: true).Cast<IDictionary<string, object>>().ToList();
-            
+            var excelData = MiniExcel.Query(sciezka, useHeaderRow: true)
+                                     .Cast<IDictionary<string, object>>()
+                                     .ToList();
+
             foreach (var d in excelData)
             {
                 var row = new PracownikImportRow();
-                row.Imie = GetVal(d, "Pracownik - Imię");
-                row.DrugieImie = GetVal(d, "Pracownik - Drugie imię");
-                row.Nazwisko = GetVal(d, "Pracownik - Nazwisko");
-                row.PlecExcel = GetVal(d, "Pracownik - Płeć");
-                row.BirthDateExcel = GetVal(d, "Pracownik - Data urodzenia");
-                row.Pesel = PeselHelper.NormalizePesel(GetVal(d, "Pracownik - Numery identyfikacyjne - PESEL"));
-                row.Obywatelstwo = GetVal(d, "Pracownik - Obywatelstwo");
-                row.Paszport = GetVal(d, "Pracownik - Numery identyfikacyjne - Paszport");
+                row.Imie = GetVal(d, "Pracownik - Imię", "Imię", "Imie");
+                row.DrugieImie = GetVal(d, "Pracownik - Drugie imię", "Drugie imię");
+                row.Nazwisko = GetVal(d, "Pracownik - Nazwisko", "Nazwisko");
+                row.PlecExcel = GetVal(d, "Pracownik - Płeć", "Płeć", "Plec");
+                row.BirthDateExcel = GetVal(d, "Pracownik - Data urodzenia", "Data urodzenia");
+                row.Pesel = PeselHelper.NormalizePesel(GetVal(d, "Pracownik - Numery identyfikacyjne - PESEL", "PESEL"));
+                row.Obywatelstwo = GetVal(d, "Pracownik - Obywatelstwo", "Obywatelstwo");
+                row.Paszport = GetVal(d, "Pracownik - Numery identyfikacyjne - Paszport - Numer", "Paszport - Numer", "Paszport");
                 row.PaszportWydany = GetVal(d, "Pracownik - Numery identyfikacyjne - Paszport - Data wydania");
                 row.PaszportWazny = GetVal(d, "Pracownik - Numery identyfikacyjne - Paszport - Data ważności");
-                
                 row.Ulica = GetVal(d, "Pracownik - Adres Zamieszkania - Ulica");
-                row.NrDomu = GetVal(d, "Pracownik - Adres Zamieszkania - Numer domu / mieszkania");
+                row.NrDomu = GetVal(d, "Pracownik - Adres Zamieszkania - Numer domu");
                 row.Miejscowosc = GetVal(d, "Pracownik - Adres Zamieszkania - Miejscowość");
                 row.KodPocztowy = GetVal(d, "Pracownik - Adres Zamieszkania - Kod pocztowy");
                 row.Gmina = GetVal(d, "Pracownik - Adres Zamieszkania - Gmina");
                 row.Powiat = GetVal(d, "Pracownik - Adres Zamieszkania - Powiat");
                 row.Wojewodztwo = GetVal(d, "Pracownik - Adres Zamieszkania - Województwo");
                 row.Kraj = GetVal(d, "Pracownik - Adres Zamieszkania - Kraj");
-                
                 row.Telefon = GetVal(d, "Pracownik - Dane kontaktowe - Telefon");
                 row.Email = GetVal(d, "Pracownik - Dane kontaktowe - E-mail");
-                
                 row.BankStr = GetVal(d, "Pracownik - Rachunek bankowy");
                 row.NfzStr = GetVal(d, "Pracownik - Oddział NFZ");
-                string us = GetVal(d, "Pracownik - Urząd skarbowy");
-                if (string.IsNullOrWhiteSpace(us))
-                {
-                    us = GetVal(d, "Urząd skarbowy");
-                }
-                row.UrzadSkarbowy = us;
-                
-                row.TypUmowy = GetVal(d, "Typ");
+                row.UrzadSkarbowy = GetVal(d, "Pracownik - Urząd skarbowy", "Urząd skarbowy");
+                row.TypUmowy = GetVal(d, "Typ", "Rodzaj umowy");
                 row.DataRozpoczecia = GetVal(d, "Data rozpoczęcia");
                 row.DataZakonczenia = GetVal(d, "Data zakończenia");
                 row.DataZawarcia = GetVal(d, "Data zawarcia");
-                row.DzialNazwa = GetVal(d, "Dział/Klient - Nazwa");
+                row.DzialNazwa = GetVal(d, "Dział/Klient - Nazwa", "Dział - Nazwa");
                 row.KodZawodu = GetVal(d, "Pracownik - Bieżąca umowa - Stanowisko - Kod zawodu");
-                
-                row.JestStudentem = GetVal(d, "Pracownik - Dane do rozliczeń - Jestem studentem lub uczniem i nie przekroczyłem 26 roku życia");
-                
-                if (!string.IsNullOrWhiteSpace(row.Imie) || !string.IsNullOrWhiteSpace(row.Nazwisko) || !string.IsNullOrWhiteSpace(row.Pesel))
+                row.JestStudentem = GetVal(d, "Pracownik - Dane do rozliczeń - Jestem studentem");
+
+                string fullP = GetVal(d, "Pracownik");
+                if ((string.IsNullOrWhiteSpace(row.Imie) || string.IsNullOrWhiteSpace(row.Nazwisko)) && !string.IsNullOrWhiteSpace(fullP))
+                {
+                    var parts = fullP.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.Length > 0 && string.IsNullOrWhiteSpace(row.Nazwisko)) row.Nazwisko = parts[0];
+                    if (parts.Length > 1 && string.IsNullOrWhiteSpace(row.Imie)) row.Imie = string.Join(" ", parts.Skip(1));
+                }
+
+                if (!string.IsNullOrWhiteSpace(row.Imie) || !string.IsNullOrWhiteSpace(row.Nazwisko) || !string.IsNullOrWhiteSpace(row.Pesel) || !string.IsNullOrWhiteSpace(fullP))
                 {
                     rows.Add(row);
                 }
@@ -138,30 +138,165 @@ namespace HrAppka_Import_Pracowników
             return rows;
         }
 
-        private string GetVal(IDictionary<string, object> dict, string key)
+        private static string GetVal(IDictionary<string, object> dict, params string[] targetKeys)
         {
-            if (dict.TryGetValue(key, out var val) && val != null)
+            if (dict == null) return "";
+            foreach (var targetKey in targetKeys)
             {
-                return val.ToString()?.Trim() ?? "";
-            }
-            var keyNormalized = NormalizeKey(key);
-            foreach (var k in dict.Keys)
-            {
-                if (NormalizeKey(k) == keyNormalized)
+                if (string.IsNullOrWhiteSpace(targetKey)) continue;
+
+                if (dict.TryGetValue(targetKey, out var directVal) && directVal != null)
                 {
-                    return dict[k]?.ToString()?.Trim() ?? "";
+                    string s = directVal.ToString()?.Trim() ?? "";
+                    if (!string.IsNullOrWhiteSpace(s)) return s;
+                }
+
+                string normTarget = RemoveDiacritics(targetKey);
+                foreach (var kvp in dict)
+                {
+                    if (kvp.Key == null || kvp.Value == null) continue;
+                    string normKey = RemoveDiacritics(kvp.Key);
+                    if (normKey.Equals(normTarget, StringComparison.OrdinalIgnoreCase) ||
+                        normKey.Contains(normTarget) || normTarget.Contains(normKey))
+                    {
+                        string s = kvp.Value.ToString()?.Trim() ?? "";
+                        if (!string.IsNullOrWhiteSpace(s)) return s;
+                    }
                 }
             }
             return "";
         }
 
-        private string NormalizeKey(string key)
+        private static (string ulica, string nrDomu, string nrLokalu) ParseSmartAddress(string rawUlica, string rawHouse, string rawCity)
         {
-            return key.ToLower()
-                      .Replace("ą", "a").Replace("ć", "c").Replace("ę", "e")
-                      .Replace("ł", "l").Replace("ń", "n").Replace("ó", "o")
-                      .Replace("ś", "s").Replace("ź", "z").Replace("ż", "z")
-                      .Replace(" ", "").Replace("-", "").Replace("/", "");
+            string ulica = (rawUlica ?? "").Trim();
+            string house = (rawHouse ?? "").Trim();
+            string city = (rawCity ?? "").Trim();
+            string nrDomu = "";
+            string nrLokalu = "";
+
+            if (!string.IsNullOrWhiteSpace(city) && ulica.EndsWith(city, StringComparison.OrdinalIgnoreCase))
+            {
+                ulica = ulica.Substring(0, ulica.Length - city.Length).Trim();
+            }
+
+            string houseClean = System.Text.RegularExpressions.Regex.Replace(house, @"\s*/\s*", "/");
+            houseClean = System.Text.RegularExpressions.Regex.Replace(houseClean, @"\s*-\s*", "-");
+
+            var isAptOrText = System.Text.RegularExpressions.Regex.Match(houseClean, @"^(apt|m|lok|lokal|mieszkanie)\.?\s*(.*)$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (isAptOrText.Success)
+            {
+                nrLokalu = isAptOrText.Groups[2].Value.Trim();
+                var mSt = System.Text.RegularExpressions.Regex.Match(ulica, @"^(.*?)\s+(\d+[A-Za-z]?)$");
+                if (mSt.Success)
+                {
+                    ulica = mSt.Groups[1].Value.Trim();
+                    nrDomu = mSt.Groups[2].Value.Trim();
+                }
+                else
+                {
+                    nrDomu = houseClean;
+                }
+            }
+            else if (System.Text.RegularExpressions.Regex.IsMatch(houseClean, @"^[A-Za-z]+$"))
+            {
+                nrLokalu = houseClean;
+                var mSt = System.Text.RegularExpressions.Regex.Match(ulica, @"^(.*?)\s+(\d+[A-Za-z]?)$");
+                if (mSt.Success)
+                {
+                    ulica = mSt.Groups[1].Value.Trim();
+                    nrDomu = mSt.Groups[2].Value.Trim();
+                }
+                else
+                {
+                    nrDomu = "1";
+                }
+            }
+            else if (houseClean.Contains("/"))
+            {
+                var parts = houseClean.Split(new[] { '/' }, 2);
+                nrDomu = parts[0].Trim();
+                nrLokalu = parts[1].Trim();
+            }
+            else
+            {
+                nrDomu = houseClean;
+            }
+
+            var mStNum = System.Text.RegularExpressions.Regex.Match(ulica, @"^(.*?)\s+(\d+[A-Za-z]?(?:/\d+[A-Za-z]?)?)$");
+            if (mStNum.Success && (string.IsNullOrWhiteSpace(nrDomu) || nrDomu.Equals(nrLokalu, StringComparison.OrdinalIgnoreCase)))
+            {
+                string stNumPart = mStNum.Groups[2].Value;
+                if (stNumPart.Contains("/"))
+                {
+                    ulica = mStNum.Groups[1].Value.Trim();
+                    var p = stNumPart.Split(new[] { '/' }, 2);
+                    nrDomu = p[0];
+                    nrLokalu = p[1];
+                }
+                else if (string.IsNullOrWhiteSpace(nrDomu))
+                {
+                    ulica = mStNum.Groups[1].Value.Trim();
+                    nrDomu = stNumPart;
+                }
+            }
+
+            if (nrDomu.Length > 10) nrDomu = nrDomu.Substring(0, 10);
+            if (nrLokalu.Length > 10) nrLokalu = nrLokalu.Substring(0, 10);
+            if (ulica.Length > 255) ulica = ulica.Substring(0, 255);
+
+            return (ulica, nrDomu, nrLokalu);
+        }
+
+        private static bool ParseBankString(string rawBankStr, out string iban, out string currencySymbol, out string bankName)
+        {
+            iban = "";
+            currencySymbol = "PLN";
+            bankName = "Rachunek podstawowy";
+
+            if (string.IsNullOrWhiteSpace(rawBankStr))
+                return false;
+
+            var match = System.Text.RegularExpressions.Regex.Match(rawBankStr, @"(PL\s*)?\d{2}(\s*\d{4}){6}|\d{26}", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (match.Success)
+            {
+                iban = match.Value.Replace(" ", "").ToUpper();
+                if (iban.Length > 34)
+                {
+                    iban = iban.Substring(0, 34);
+                }
+
+                string remainder = (rawBankStr.Substring(0, match.Index) + rawBankStr.Substring(match.Index + match.Length)).Trim();
+                remainder = remainder.Trim('\r', '\n', ' ', '-', ':', '|');
+
+                var currMatch = System.Text.RegularExpressions.Regex.Match(remainder, @"^(PLN|EUR|USD|GBP|CHF)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                if (currMatch.Success)
+                {
+                    currencySymbol = currMatch.Value.ToUpper();
+                    remainder = remainder.Substring(currMatch.Length).Trim('\r', '\n', ' ', '-', ':', '|');
+                }
+
+                if (!string.IsNullOrWhiteSpace(remainder))
+                {
+                    bankName = System.Text.RegularExpressions.Regex.Replace(remainder, @"[\r\n]+", " ").Trim();
+                    if (bankName.Length > 255)
+                    {
+                        bankName = bankName.Substring(0, 255);
+                    }
+                }
+                return true;
+            }
+            return false;
+        }
+
+        private static string RemoveDiacritics(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return "";
+            string s = text.Replace(" ", "").Replace("-", "").Replace("/", "").ToLowerInvariant();
+            s = s.Replace("ą", "a").Replace("ć", "c").Replace("ę", "e")
+                 .Replace("ł", "l").Replace("ń", "n").Replace("ó", "o")
+                 .Replace("ś", "s").Replace("ź", "z").Replace("ż", "z");
+            return s;
         }
 
         private void ImportujDanePracownikow(IKontekstOperacji kontekstOperacji, List<PracownikImportRow> rows)
@@ -313,15 +448,19 @@ namespace HrAppka_Import_Pracowników
         private void PreAnalyzeRows(IUchwyt uchwyt, List<PracownikImportRow> rows)
         {
             var podmioty = uchwyt.Podmioty();
-            var existingPesels = podmioty.Dane.WszyscyPracownicy()
-                .Select(p => p.Osoba.PESEL)
-                .Where(pesel => !string.IsNullOrEmpty(pesel))
-                .ToHashSet();
+            var existingPesels = new HashSet<string>(
+                podmioty.Dane.WszyscyPracownicy()
+                    .Where(p => p.Osoba != null && !string.IsNullOrEmpty(p.Osoba.PESEL))
+                    .Select(p => p.Osoba.PESEL),
+                StringComparer.OrdinalIgnoreCase
+            );
 
-            var existingPassports = podmioty.Dane.WszyscyPracownicy()
-                .Select(p => p.Osoba.SeriaINumerDokumentuTozsamosci)
-                .Where(passport => !string.IsNullOrEmpty(passport))
-                .ToHashSet();
+            var existingPassports = new HashSet<string>(
+                podmioty.Dane.WszyscyPracownicy()
+                    .Where(p => p.Osoba != null && !string.IsNullOrEmpty(p.Osoba.SeriaINumerDokumentuTozsamosci))
+                    .Select(p => p.Osoba.SeriaINumerDokumentuTozsamosci),
+                StringComparer.OrdinalIgnoreCase
+            );
 
             foreach (var row in rows)
             {
@@ -336,9 +475,9 @@ namespace HrAppka_Import_Pracowników
                     {
                         if (existingPassports.Contains(row.Paszport))
                         {
-                            var existingOsoba = podmioty.Dane.WszystkieOsoby()
-                                .FirstOrDefault(p => p.Osoba != null && p.Osoba.SeriaINumerDokumentuTozsamosci == row.Paszport);
-                            SprawdzIstniejacyPracownikUmowy(uchwyt, existingOsoba, row);
+                            row.Ostrzezenia += "Pracownik z tym paszportem już istnieje w bazie. ";
+                            row.Status = "Istnieje w bazie";
+                            row.DecyzjaDlaIstniejacego = DecyzjaIstniejacyPracownik.AktualizujKartotekeIDodajUmowe;
                         }
                         else
                         {
@@ -356,39 +495,42 @@ namespace HrAppka_Import_Pracowników
                     }
                     else
                     {
-                        if (!string.IsNullOrWhiteSpace(row.BirthDateExcel))
+                        row.ResolvedBirthDate = birthDate.Value;
+                        row.ResolvedGender = gender;
+
+                        if (!string.IsNullOrWhiteSpace(row.BirthDateExcel) && DateTime.TryParse(row.BirthDateExcel, out DateTime dtExcel))
                         {
-                            if (DateTime.TryParse(row.BirthDateExcel, out DateTime dtExcel))
+                            if (dtExcel.Date != birthDate.Value.Date)
                             {
-                                if (dtExcel.Date != birthDate.Value.Date)
-                                {
-                                    row.Ostrzezenia += $"Niezgodność daty urodzenia z PESEL (Excel: {dtExcel:yyyy-MM-dd}, PESEL: {birthDate.Value:yyyy-MM-dd}). ";
-                                }
+                                row.Ostrzezenia += $"Data ur. z PESEL ({birthDate.Value:yyyy-MM-dd}). ";
                             }
                         }
                         if (!string.IsNullOrWhiteSpace(row.PlecExcel))
                         {
                             if (!string.Equals(row.PlecExcel, gender, StringComparison.OrdinalIgnoreCase))
                             {
-                                row.Ostrzezenia += $"Niezgodność płci z PESEL (Excel: {row.PlecExcel}, PESEL: {gender}). ";
+                                row.Ostrzezenia += $"Płeć z PESEL ({gender}). ";
                             }
                         }
                     }
 
                     if (existingPesels.Contains(row.Pesel))
                     {
-                        var existingOsoba = podmioty.Dane.WszystkieOsoby()
-                            .FirstOrDefault(p => p.Osoba != null && p.Osoba.PESEL == row.Pesel);
-                        SprawdzIstniejacyPracownikUmowy(uchwyt, existingOsoba, row);
+                        row.Ostrzezenia += "Pracownik z tym PESEL już istnieje w bazie. ";
+                        row.Status = "Istnieje w bazie";
+                        row.DecyzjaDlaIstniejacego = DecyzjaIstniejacyPracownik.AktualizujKartotekeIDodajUmowe;
+                    }
+                    else
+                    {
+                        row.Status = "Gotowy";
                     }
                 }
 
                 if (!string.IsNullOrWhiteSpace(row.BankStr))
                 {
-                    string[] bankParts = row.BankStr.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-                    if (bankParts.Length < 3)
+                    if (!ParseBankString(row.BankStr, out string iban, out _, out _) || string.IsNullOrWhiteSpace(iban) || iban.Length < 10 || iban.Length > 34)
                     {
-                        row.Ostrzezenia += "Niepełne dane rachunku bankowego w pliku. ";
+                        row.Ostrzezenia += "Niepoprawny numer rachunku bankowego (IBAN). ";
                     }
                 }
             }
@@ -522,7 +664,7 @@ namespace HrAppka_Import_Pracowników
                         }
                     }
 
-                    if (!string.IsNullOrWhiteSpace(item.Miejscowosc) && !string.IsNullOrWhiteSpace(item.NrDomu))
+                    if (!string.IsNullOrWhiteSpace(item.Miejscowosc) || !string.IsNullOrWhiteSpace(item.Ulica))
                     {
                         var adres = podmiot.AdresPodstawowy;
                         if (adres == null)
@@ -530,11 +672,15 @@ namespace HrAppka_Import_Pracowników
                             adres = pracownik.DodajAdres(uchwyt.TypyAdresu().DaneDomyslne.Glowny);
                         }
                         adres.Nazwa = "Adres zamieszkania";
-                        adres.Szczegoly.Ulica = item.Ulica;
-                        adres.Szczegoly.NrDomu = item.NrDomu;
-                        adres.Szczegoly.Miejscowosc = item.Miejscowosc;
+
+                        var (parsedUlica, parsedNrDomu, parsedNrLokalu) = ParseSmartAddress(item.Ulica, item.NrDomu, item.Miejscowosc);
+
+                        adres.Szczegoly.Ulica = parsedUlica;
+                        adres.Szczegoly.NrDomu = string.IsNullOrWhiteSpace(parsedNrDomu) ? "1" : parsedNrDomu;
+                        adres.Szczegoly.NrLokalu = parsedNrLokalu;
+                        adres.Szczegoly.Miejscowosc = string.IsNullOrWhiteSpace(item.Miejscowosc) ? "Lublin" : item.Miejscowosc;
                         adres.Szczegoly.KodPocztowy = item.KodPocztowy;
-                        adres.Szczegoly.Poczta = item.Miejscowosc;
+                        adres.Szczegoly.Poczta = string.IsNullOrWhiteSpace(item.Miejscowosc) ? "Lublin" : item.Miejscowosc;
                         adres.Panstwo = ZnajdzPanstwo(uchwyt, item.Kraj);
 
                         var woj = ZnajdzWojewodztwo(uchwyt, item.Wojewodztwo);
@@ -615,9 +761,12 @@ namespace HrAppka_Import_Pracowników
                     if (!string.IsNullOrWhiteSpace(item.Paszport))
                     {
                         osoba.TypDokumentuTozsamosci = (byte)InsERT.Moria.Klienci.TypDokumentuTozsamosci.Paszport;
-                        osoba.SeriaINumerDokumentuTozsamosci = item.Paszport;
+                        string pass = item.Paszport.Trim();
+                        osoba.SeriaINumerDokumentuTozsamosci = pass.Length > 20 ? pass.Substring(0, 20) : pass;
                         if (DateTime.TryParse(item.PaszportWydany, out DateTime wydany))
+                        {
                             osoba.DataWystawieniaDokumentuTozsamosci = wydany;
+                        }
                     }
 
                     // Gratyfikant-specific fields on pracownik.Dane.Osoba.Pracownik.PracownikGr
@@ -929,7 +1078,7 @@ namespace HrAppka_Import_Pracowników
                                 // Query for an existing unexported zgłoszeniowa declaration (the last one)
                                 var existingDecl = dekZusMgr.Dane.Wszystkie()
                                     .Where(d => d.RodzajDeklaracji == (byte)RodzajDeklaracjiZUS.Zgloszeniowa 
-                                             && d.StatusWysylki == (byte)StatusWysylkiDeklaracjiZUS.Brak)
+                                             && d.StatusWysylki == (byte)StatusWysylkiDeklaracjiZUS.Brak && !d.WyslanyDoPlatnika)
                                     .OrderByDescending(d => d.Id)
                                     .FirstOrDefault();
 
@@ -1242,8 +1391,7 @@ namespace HrAppka_Import_Pracowników
             
             // 1. Search existing citizenship in DB
             var dbObywatelstwo = obywatelstwaMgr.Dane.Wszystkie().FirstOrDefault(o => 
-                o.Nazwa.Equals(platnikName, StringComparison.OrdinalIgnoreCase) || 
-                (o.Panstwo != null && o.Panstwo.Id == panstwo.Id)
+                (o.Panstwo != null && o.Panstwo.Id == panstwo.Id && o.Nazwa.Equals(platnikName, StringComparison.OrdinalIgnoreCase)) || o.Nazwa.Equals(platnikName, StringComparison.OrdinalIgnoreCase) || o.Nazwa.Equals(panstwo.Nazwa, StringComparison.OrdinalIgnoreCase)
             );
 
             if (dbObywatelstwo != null)
@@ -1413,3 +1561,10 @@ namespace HrAppka_Import_Pracowników
         };
     }
 }
+
+
+
+
+
+
+
