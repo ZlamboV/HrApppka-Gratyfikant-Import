@@ -40,8 +40,15 @@ namespace HrAppka_Import_Pracowników
         private string paszport = "";
         private string paszportWydany = "";
         private string paszportWazny = "";
+        private string dowod = "";
+        private string dowodWydany = "";
+        private string dowodWazny = "";
+        private string paszportBio = "";
+        private string paszportBioWydany = "";
+        private string paszportBioWazny = "";
         private string ulica = "";
         private string nrDomu = "";
+        private string nrLokalu = "";
         private string miejscowosc = "";
         private string kodPocztowy = "";
         private string gmina = "";
@@ -157,6 +164,54 @@ namespace HrAppka_Import_Pracowników
 
         [Browsable(false)]
         [BezKolumny]
+        public string Dowod
+        {
+            get => dowod;
+            set => SetProperty(ref dowod, value);
+        }
+
+        [Browsable(false)]
+        [BezKolumny]
+        public string DowodWydany
+        {
+            get => dowodWydany;
+            set => SetProperty(ref dowodWydany, value);
+        }
+
+        [Browsable(false)]
+        [BezKolumny]
+        public string DowodWazny
+        {
+            get => dowodWazny;
+            set => SetProperty(ref dowodWazny, value);
+        }
+
+        [Browsable(false)]
+        [BezKolumny]
+        public string PaszportBio
+        {
+            get => paszportBio;
+            set => SetProperty(ref paszportBio, value);
+        }
+
+        [Browsable(false)]
+        [BezKolumny]
+        public string PaszportBioWydany
+        {
+            get => paszportBioWydany;
+            set => SetProperty(ref paszportBioWydany, value);
+        }
+
+        [Browsable(false)]
+        [BezKolumny]
+        public string PaszportBioWazny
+        {
+            get => paszportBioWazny;
+            set => SetProperty(ref paszportBioWazny, value);
+        }
+
+        [Browsable(false)]
+        [BezKolumny]
         public string Ulica
         {
             get => ulica;
@@ -170,6 +225,18 @@ namespace HrAppka_Import_Pracowników
             get => nrDomu;
             set => SetProperty(ref nrDomu, value);
         }
+
+        [Browsable(false)]
+        [BezKolumny]
+        public string NrLokalu
+        {
+            get => nrLokalu;
+            set => SetProperty(ref nrLokalu, value);
+        }
+
+        [Browsable(false)]
+        [BezKolumny]
+        public object? SelectedSzablonUmowy { get; set; }
 
         [Browsable(false)]
         [BezKolumny]
@@ -369,9 +436,9 @@ namespace HrAppka_Import_Pracowników
         }
 
         // WPF Validation (IDataErrorInfo) Explicit Interface Implementation
-        string? IDataErrorInfo.Error => null;
+        string IDataErrorInfo.Error => string.Empty;
 
-        string? IDataErrorInfo.this[string columnName]
+        string IDataErrorInfo.this[string columnName]
         {
             get
             {
@@ -393,7 +460,7 @@ namespace HrAppka_Import_Pracowników
                             return "Nieprawidłowy PESEL lub suma kontrolna.";
                     }
                 }
-                return null;
+                return string.Empty;
             }
         }
 

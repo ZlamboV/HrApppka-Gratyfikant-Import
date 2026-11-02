@@ -18,6 +18,7 @@ using InsERT.Moria.Sfera;
 using InsERT.Moria.Waluty;
 using Microsoft.Win32;
 using MiniExcelLibs;
+using HrAppka_Import_Pracowników.Services;
 
 namespace HrAppka_Import_Pracowników
 {
@@ -110,8 +111,8 @@ namespace HrAppka_Import_Pracowników
         {
             var dialog = new OpenFileDialog
             {
-                Filter = "Pliki Excel (*.xlsx)|*.xlsx",
-                Title = "Import 2.0 (Sfera Native) - Wybierz plik z danymi HrAppka",
+                Filter = "Pliki danych (*.xlsx;*.csv)|*.xlsx;*.csv|Wszystkie pliki (*.*)|*.*",
+                Title = "Import Pracowników - Wybierz plik z danymi (*.xlsx, *.csv)",
                 CheckFileExists = true
             };
 
@@ -126,104 +127,7 @@ namespace HrAppka_Import_Pracowników
 
         public static List<PracownikImportRow> WczytajExcel(string sciezka)
         {
-            var rows = new List<PracownikImportRow>();
-            var rawRows = MiniExcel.Query(sciezka, useHeaderRow: false)
-                                   .Cast<IDictionary<string, object>>()
-                                   .ToList();
-
-            if (rawRows.Count < 2) return rows;
-
-            var firstRow = rawRows[0];
-            if (firstRow.Count < 30)
-            {
-                throw new InvalidOperationException($"Plik Excel ma nieprawidłową liczbę kolumn ({firstRow.Count}). Oczekiwano 38 kolumn z HrAppka.");
-            }
-
-            for (int r = 1; r < rawRows.Count; r++)
-            {
-                var dict = rawRows[r];
-                var values = dict.Values.ToArray();
-
-                string GetColVal(int idx1Based)
-                {
-                    int zeroIdx = idx1Based - 1;
-                    if (zeroIdx >= 0 && zeroIdx < values.Length && values[zeroIdx] != null)
-                    {
-                        return values[zeroIdx].ToString()?.Trim() ?? "";
-                    }
-                    return "";
-                }
-
-                var row = new PracownikImportRow();
-
-                // Strict 1-based Index Mapping (Ignoring Col 1 'Pracownik' full name)
-                row.DzialNazwa = GetColVal(2);
-                row.DataRozpoczecia = GetColVal(3);
-                row.DataZakonczenia = GetColVal(4);
-                row.TypUmowy = GetColVal(5);
-                row.JestStudentem = GetColVal(6);
-                row.DataZawarcia = GetColVal(7);
-                // Col 8 = Status (Ignored)
-
-                // Personal Name Details (Col 9, 10, 11 are Clean Primary Sources)
-                row.Imie = NormalizeForeignLetters(GetColVal(9));
-                row.DrugieImie = NormalizeForeignLetters(GetColVal(10));
-                row.Nazwisko = NormalizeForeignLetters(GetColVal(11));
-
-                row.PlecExcel = GetColVal(12);
-                row.BirthDateExcel = GetColVal(13);
-                row.Obywatelstwo = GetColVal(14);
-                row.NfzStr = GetColVal(15);
-                row.UrzadSkarbowy = GetColVal(16);
-                row.BankStr = GetColVal(17);
-                row.Telefon = GetColVal(18);
-                row.Email = GetColVal(19);
-                row.Pesel = PeselHelper.NormalizePesel(GetColVal(20));
-
-                // Document priority: Paszport (Col 24) -> Paszport Biometryczny (Col 27) -> Dowód (Col 21)
-                string p1 = GetColVal(24);
-                string p2 = GetColVal(27);
-                string d1 = GetColVal(21);
-
-                if (!string.IsNullOrWhiteSpace(p1))
-                {
-                    row.Paszport = p1.Length > 20 ? p1.Substring(0, 20) : p1;
-                    row.PaszportWydany = GetColVal(25);
-                    row.PaszportWazny = GetColVal(26);
-                }
-                else if (!string.IsNullOrWhiteSpace(p2))
-                {
-                    row.Paszport = p2.Length > 20 ? p2.Substring(0, 20) : p2;
-                    row.PaszportWydany = GetColVal(28);
-                    row.PaszportWazny = GetColVal(29);
-                }
-                else if (!string.IsNullOrWhiteSpace(d1))
-                {
-                    row.Paszport = d1.Length > 20 ? d1.Substring(0, 20) : d1;
-                    row.PaszportWydany = GetColVal(22);
-                    row.PaszportWazny = GetColVal(23);
-                }
-
-                // Address Mapping (Col 30 - 37)
-                row.Ulica = GetColVal(30);
-                row.NrDomu = GetColVal(31);
-                row.Miejscowosc = GetColVal(32);
-                row.KodPocztowy = GetColVal(33);
-                row.Gmina = GetColVal(34);
-                row.Powiat = GetColVal(35);
-                row.Wojewodztwo = GetColVal(36);
-                row.Kraj = GetColVal(37);
-                row.KodZawodu = GetColVal(38);
-
-                // Sanitize address fields
-                SanitizeAddressFields(row);
-
-                if (!string.IsNullOrWhiteSpace(row.Imie) || !string.IsNullOrWhiteSpace(row.Nazwisko) || !string.IsNullOrWhiteSpace(row.Pesel) || !string.IsNullOrWhiteSpace(row.Paszport))
-                {
-                    rows.Add(row);
-                }
-            }
-            return rows;
+            return UniversalFileLoader.LoadFile(sciezka);
         }
 
         public static void SanitizeAddressFields(PracownikImportRow row)
@@ -666,10 +570,12 @@ namespace HrAppka_Import_Pracowników
                     LogNexo.Informacja($"[Import 2.0] Ustawiono dane osobowe: Imi='{osoba.Imie}', DrugieImi='{osoba.DrugieImie}', Nazwisko='{osoba.Nazwisko}'");
 
                     // 3. Citizenship & Country
+                    Panstwo? resolvedPanstwo = null;
                     if (!string.IsNullOrWhiteSpace(item.Obywatelstwo))
                     {
                         LogNexo.Informacja($"[Import 2.0] Resolving Obywatelstwo dla: '{item.Obywatelstwo}'");
-                        var obywatelstwo = ResolveObywatelstwo(uchwyt, item.Obywatelstwo);
+                        var (panstwo, obywatelstwo, _) = ZusCitizenshipManager.Instance.ResolveSfera(uchwyt, item.Obywatelstwo);
+                        resolvedPanstwo = panstwo;
                         if (obywatelstwo != null)
                         {
                             osoba.Pracownik.Obywatelstwo = obywatelstwo;
@@ -677,21 +583,34 @@ namespace HrAppka_Import_Pracowników
                         }
                     }
 
-                    // 4. Address Details (Smart Parser)
-                    if (!string.IsNullOrWhiteSpace(item.Miejscowosc) || !string.IsNullOrWhiteSpace(item.Ulica))
+                    // 4. Address Details (ZUS Płatnik & Nexo DB Schema Compliant)
+                    if (!string.IsNullOrWhiteSpace(item.Miejscowosc) || !string.IsNullOrWhiteSpace(item.Ulica) || !string.IsNullOrWhiteSpace(item.NrDomu))
                     {
                         var adres = podmiot.AdresPodstawowy ?? pracownikBO.DodajAdres(uchwyt.TypyAdresu().DaneDomyslne.Glowny);
                         adres.Nazwa = "Adres zamieszkania";
 
-                        var (parsedUlica, parsedNrDomu, parsedNrLokalu) = ParseSmartAddress(item.Ulica, item.NrDomu, item.Miejscowosc);
+                        string rawHouseApt = string.IsNullOrWhiteSpace(item.NrLokalu)
+                            ? item.NrDomu
+                            : $"{item.NrDomu}/{item.NrLokalu}";
 
-                        adres.Szczegoly.Ulica = parsedUlica;
-                        adres.Szczegoly.NrDomu = string.IsNullOrWhiteSpace(parsedNrDomu) ? "1" : parsedNrDomu;
-                        adres.Szczegoly.NrLokalu = parsedNrLokalu;
-                        adres.Szczegoly.Miejscowosc = string.IsNullOrWhiteSpace(item.Miejscowosc) ? "Lublin" : item.Miejscowosc;
-                        adres.Szczegoly.KodPocztowy = item.KodPocztowy;
-                        adres.Szczegoly.Poczta = string.IsNullOrWhiteSpace(item.Miejscowosc) ? "Lublin" : item.Miejscowosc;
-                        adres.Panstwo = ZnajdzPanstwo(uchwyt, item.Kraj);
+                        var norm = AddressNormalizer.Normalize(
+                            rawStreet: item.Ulica,
+                            rawHouseAndApt: rawHouseApt,
+                            rawCity: item.Miejscowosc,
+                            rawPostalCode: item.KodPocztowy,
+                            rawGmina: item.Gmina,
+                            rawPowiat: item.Powiat,
+                            rawWojewodztwo: item.Wojewodztwo,
+                            rawCountry: item.Kraj
+                        );
+
+                        adres.Szczegoly.Ulica = norm.Ulica;
+                        adres.Szczegoly.NrDomu = norm.NrDomu;
+                        adres.Szczegoly.NrLokalu = norm.NrLokalu;
+                        adres.Szczegoly.Miejscowosc = norm.Miejscowosc;
+                        adres.Szczegoly.KodPocztowy = norm.KodPocztowy;
+                        adres.Szczegoly.Poczta = norm.Poczta;
+                        adres.Panstwo = ZnajdzPanstwo(uchwyt, norm.Kraj);
 
                         var woj = ZnajdzWojewodztwo(uchwyt, item.Wojewodztwo);
                         if (woj != null) adres.Szczegoly.Wojewodztwo = woj;
@@ -699,14 +618,16 @@ namespace HrAppka_Import_Pracowników
                         var pow = ZnajdzPowiat(uchwyt, woj, item.Powiat);
                         if (pow != null)
                         {
-                            var gmina = ZnajdzGmine(uchwyt, pow, item.Gmina);
+                            var gmina = ZnajdzGmine(uchwyt, pow, norm.Gmina);
                             if (gmina != null) adres.Szczegoly.Gmina = gmina;
                         }
                         else
                         {
-                            var gmina = ZnajdzGmine(uchwyt, null, item.Gmina);
+                            var gmina = ZnajdzGmine(uchwyt, null, norm.Gmina);
                             if (gmina != null) adres.Szczegoly.Gmina = gmina;
                         }
+
+                        LogNexo.Informacja($"[Import 2.0] Znormalizowano adres: Ulica='{norm.Ulica}', Dom='{norm.NrDomu}', Lok='{norm.NrLokalu}', Miasto='{norm.Miejscowosc}', Kod='{norm.KodPocztowy}'");
                     }
 
                     // 5. Contacts (Email & Telefon z dedupilakcj)
@@ -762,13 +683,12 @@ namespace HrAppka_Import_Pracowników
                         }
                     }
 
-                    // 6. Paszport Cudzoziemca
-                    if (!string.IsNullOrWhiteSpace(item.Paszport))
+                    // 6. Identyfikacja Dokumentu Tożsamości (zgodna z priorytetami ZUS i krajem wydania)
+                    var docResult = DocumentIdentificationService.DetermineDocument(item, resolvedPanstwo);
+                    DocumentIdentificationService.ApplyToEmployee(podmiot, docResult);
+                    if (docResult.HasDocument)
                     {
-                        osoba.TypDokumentuTozsamosci = (byte)InsERT.Moria.Klienci.TypDokumentuTozsamosci.Paszport;
-                        osoba.SeriaINumerDokumentuTozsamosci = item.Paszport;
-                        if (DateTime.TryParse(item.PaszportWydany, out DateTime wydany))
-                            osoba.DataWystawieniaDokumentuTozsamosci = wydany;
+                        LogNexo.Informacja($"[Import 2.0] Przypisano dokument tożsamości: {docResult.DocumentType} {docResult.DocumentNumber}, Kraj: {docResult.CountryOfIssue?.Nazwa}");
                     }
 
                     // 7. Gratyfikant Specyfics & NFZ
@@ -1252,128 +1172,12 @@ namespace HrAppka_Import_Pracowników
 
         internal static Panstwo? ResolvePanstwo(IUchwyt uchwyt, string inputName, out string platnikCitizenshipName)
         {
-            platnikCitizenshipName = "";
-            if (string.IsNullOrWhiteSpace(inputName)) return null;
-
-            string normInput = inputName.Trim().ToLower();
-
-            var countryInfo = CountryRegistry.FirstOrDefault(c => 
-                c.PolishName.Equals(normInput, StringComparison.OrdinalIgnoreCase) || 
-                c.CitizenshipAdjective.Equals(normInput, StringComparison.OrdinalIgnoreCase) ||
-                c.IsoCode.Equals(normInput, StringComparison.OrdinalIgnoreCase) ||
-                normInput.StartsWith(c.CitizenshipAdjective, StringComparison.OrdinalIgnoreCase) ||
-                normInput.StartsWith(c.PolishName, StringComparison.OrdinalIgnoreCase) ||
-                c.CitizenshipAdjective.StartsWith(normInput, StringComparison.OrdinalIgnoreCase) ||
-                c.PolishName.StartsWith(normInput, StringComparison.OrdinalIgnoreCase)
-            );
-
-            string searchName = normInput;
-            string isoCode = "";
-
-            if (countryInfo != null)
-            {
-                searchName = countryInfo.PolishName;
-                isoCode = countryInfo.IsoCode;
-                platnikCitizenshipName = countryInfo.CitizenshipAdjective;
-            }
-            else
-            {
-                platnikCitizenshipName = normInput;
-            }
-
-            var panstwaMgr = uchwyt.PodajObiektTypu<IPanstwa>();
-            
-            var dbPanstwo = panstwaMgr.Dane.Wszystkie().FirstOrDefault(p => 
-                p.Nazwa.Equals(searchName, StringComparison.OrdinalIgnoreCase) || 
-                p.KodPanstwaUE.Equals(searchName, StringComparison.OrdinalIgnoreCase)
-            );
-
-            if (dbPanstwo != null)
-            {
-                return dbPanstwo;
-            }
-
-            if (!string.IsNullOrEmpty(isoCode))
-            {
-                try
-                {
-                    using (var panstwoBO = panstwaMgr.Utworz())
-                    {
-                        panstwoBO.Dane.Nazwa = searchName;
-                        panstwoBO.Dane.KodPanstwaUE = isoCode;
-                        panstwoBO.Dane.CzlonekUE = false;
-
-                        if (panstwoBO.Zapisz())
-                        {
-                            LogNexo.Informacja($"[Import 2.0] Utworzono brakujce pastwo: {searchName} (ISO: {isoCode})");
-                            return panstwoBO.Dane;
-                        }
-                        else
-                        {
-                            var bledy = uchwyt.PodajBledy(panstwoBO);
-                            var msg = string.Join("; ", bledy.Select(x => x.Tresc));
-                            LogNexo.Informacja($"[Import 2.0] Bd zapisu pastwa {searchName}: {msg}");
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    LogNexo.Blad(ex);
-                }
-            }
-
-            return panstwaMgr.Dane.Wszystkie().FirstOrDefault(p => p.KodPanstwaUE == "PL");
+            return ZusCitizenshipManager.Instance.ResolvePanstwo(uchwyt, inputName, out platnikCitizenshipName);
         }
 
         internal static Obywatelstwo? ResolveObywatelstwo(IUchwyt uchwyt, string inputName)
         {
-            if (string.IsNullOrWhiteSpace(inputName)) return null;
-
-            var panstwo = ResolvePanstwo(uchwyt, inputName, out string platnikName);
-            if (panstwo == null) return null;
-
-            if (string.IsNullOrEmpty(platnikName))
-            {
-                platnikName = panstwo.Nazwa.ToLower() + "skie";
-            }
-
-            var obywatelstwaMgr = uchwyt.PodajObiektTypu<IObywatelstwa>();
-            
-            var dbObywatelstwo = obywatelstwaMgr.Dane.Wszystkie().FirstOrDefault(o => 
-                (o.Panstwo != null && o.Panstwo.Id == panstwo.Id && o.Nazwa.Equals(platnikName, StringComparison.OrdinalIgnoreCase)) || o.Nazwa.Equals(platnikName, StringComparison.OrdinalIgnoreCase) || o.Nazwa.Equals(panstwo.Nazwa, StringComparison.OrdinalIgnoreCase)
-            );
-
-            if (dbObywatelstwo != null)
-            {
-                return dbObywatelstwo;
-            }
-
-            try
-            {
-                using (var obyBO = obywatelstwaMgr.Utworz())
-                {
-                    obyBO.Dane.Nazwa = platnikName;
-                    obyBO.Dane.Panstwo = panstwo;
-
-                    if (obyBO.Zapisz())
-                    {
-                        LogNexo.Informacja($"[Import 2.0] Utworzono brakujce obywatelstwo: {platnikName}");
-                        return obyBO.Dane;
-                    }
-                    else
-                    {
-                        var bledy = uchwyt.PodajBledy(obyBO);
-                        var msg = string.Join("; ", bledy.Select(x => x.Tresc));
-                        LogNexo.Informacja($"[Import 2.0] Bd zapisu obywatelstwa {platnikName}: {msg}");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                LogNexo.Blad(ex);
-            }
-
-            return null;
+            return ZusCitizenshipManager.Instance.ResolveObywatelstwo(uchwyt, inputName);
         }
 
         private static string NormalizeUsFullName(string input)
@@ -1693,86 +1497,13 @@ namespace HrAppka_Import_Pracowników
 
         private static (string ulica, string nrDomu, string nrLokalu) ParseSmartAddress(string rawUlica, string rawHouse, string rawCity)
         {
-            string ulica = (rawUlica ?? "").Trim();
-            string house = (rawHouse ?? "").Trim();
-            string city = (rawCity ?? "").Trim();
-            string nrDomu = "";
-            string nrLokalu = "";
-
-            if (!string.IsNullOrWhiteSpace(city) && ulica.EndsWith(city, StringComparison.OrdinalIgnoreCase))
-            {
-                ulica = ulica.Substring(0, ulica.Length - city.Length).Trim();
-            }
-
-            string houseClean = house.TrimEnd('/', '\\', ' ', ',');
-
-            var mCombo = System.Text.RegularExpressions.Regex.Match(houseClean, @"^([0-9]+[A-Za-z]?)\s*[\/,\s]+\s*(?:m\.?|lok\.?|lokal|apt\.?|mieszkanie)?\s*([0-9]+[A-Za-z]?)$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-            if (mCombo.Success)
-            {
-                nrDomu = mCombo.Groups[1].Value.Trim();
-                nrLokalu = mCombo.Groups[2].Value.Trim();
-            }
-            else if (houseClean.Contains("/"))
-            {
-                var parts = houseClean.Split(new[] { '/' }, 2);
-                nrDomu = parts[0].Trim();
-                nrLokalu = parts[1].Trim();
-            }
-            else if (houseClean.Contains(","))
-            {
-                var parts = houseClean.Split(new[] { ',' }, 2);
-                nrDomu = parts[0].Trim();
-                nrLokalu = parts[1].Trim().TrimStart('m', 'M', '.', ' ', 'l', 'L', 'o', 'k');
-            }
-            else
-            {
-                var isAptOrText = System.Text.RegularExpressions.Regex.Match(houseClean, @"^(apt|m|lok|lokal|mieszkanie)\.?\s*(.*)$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-                if (isAptOrText.Success)
-                {
-                    nrLokalu = isAptOrText.Groups[2].Value.Trim();
-                    var mSt = System.Text.RegularExpressions.Regex.Match(ulica, @"^(.*?)\s+(\d+[A-Za-z]?)$");
-                    if (mSt.Success)
-                    {
-                        ulica = mSt.Groups[1].Value.Trim();
-                        nrDomu = mSt.Groups[2].Value.Trim();
-                    }
-                    else
-                    {
-                        nrDomu = "1";
-                    }
-                }
-                else
-                {
-                    nrDomu = houseClean;
-                }
-            }
-
-            var mStNum = System.Text.RegularExpressions.Regex.Match(ulica, @"^(.*?)\s+(\d+[A-Za-z]?(?:/\d+[A-Za-z]?)?)$");
-            if (mStNum.Success && (string.IsNullOrWhiteSpace(nrDomu) || nrDomu.Equals(nrLokalu, StringComparison.OrdinalIgnoreCase)))
-            {
-                string stNumPart = mStNum.Groups[2].Value;
-                if (stNumPart.Contains("/"))
-                {
-                    ulica = mStNum.Groups[1].Value.Trim();
-                    var p = stNumPart.Split(new[] { '/' }, 2);
-                    nrDomu = p[0];
-                    nrLokalu = p[1];
-                }
-                else if (string.IsNullOrWhiteSpace(nrDomu))
-                {
-                    ulica = mStNum.Groups[1].Value.Trim();
-                    nrDomu = stNumPart;
-                }
-            }
-
-            nrDomu = System.Text.RegularExpressions.Regex.Replace(nrDomu, @"[/\s,]+$", "").Trim();
-            nrLokalu = System.Text.RegularExpressions.Regex.Replace(nrLokalu, @"^[/\s,m\.lok]+", "").Trim();
-
-            if (nrDomu.Length > 10) nrDomu = nrDomu.Substring(0, 10);
-            if (nrLokalu.Length > 10) nrLokalu = nrLokalu.Substring(0, 10);
-            if (ulica.Length > 255) ulica = ulica.Substring(0, 255);
-
-            return (ulica, nrDomu, nrLokalu);
+            var norm = AddressNormalizer.Normalize(
+                rawStreet: rawUlica,
+                rawHouseAndApt: rawHouse,
+                rawCity: rawCity,
+                rawPostalCode: null
+            );
+            return (norm.Ulica, norm.NrDomu, norm.NrLokalu);
         }
 
         private static bool ParseBankString(string rawBankStr, out string iban, out string currencySymbol, out string bankName)
@@ -1836,176 +1567,8 @@ namespace HrAppka_Import_Pracowników
                 return !string.IsNullOrWhiteSpace(iban);
             }
         }
+    }
 
-        private class CountryInfo
-        {
-            public string PolishName { get; }
-            public string IsoCode { get; }
-            public string CitizenshipAdjective { get; }
-
-            public CountryInfo(string polishName, string isoCode, string citizenshipAdjective)
-            {
-                PolishName = polishName;
-                IsoCode = isoCode;
-                CitizenshipAdjective = citizenshipAdjective;
-            }
-        }
-
-        private static readonly List<CountryInfo> CountryRegistry = new List<CountryInfo>
-        {
-            new CountryInfo("Afganistan", "AF", "afgaskie"),
-            new CountryInfo("Albania", "AL", "albaskie"),
-            new CountryInfo("Algieria", "DZ", "algierskie"),
-            new CountryInfo("Andora", "AD", "andorskie"),
-            new CountryInfo("Angola", "AO", "angolskie"),
-            new CountryInfo("Antigua i Barbuda", "AG", "antiguaskie i barbudzkie"),
-            new CountryInfo("Arabia Saudyjska", "SA", "saudyjskie"),
-            new CountryInfo("Argentyna", "AR", "argentyskie"),
-            new CountryInfo("Armenia", "AM", "armeskie"),
-            new CountryInfo("Australia", "AU", "australijskie"),
-            new CountryInfo("Austria", "AT", "austriackie"),
-            new CountryInfo("Azerbejdan", "AZ", "azerbejdaskie"),
-            new CountryInfo("Bahamy", "BS", "bahamskie"),
-            new CountryInfo("Bahrajn", "BH", "bahrajskie"),
-            new CountryInfo("Bangladesz", "BD", "banglijskie"),
-            new CountryInfo("Barbados", "BB", "barbadoskie"),
-            new CountryInfo("Belgia", "BE", "belgijskie"),
-            new CountryInfo("Belize", "BZ", "belizeskie"),
-            new CountryInfo("Benin", "BJ", "beniskie"),
-            new CountryInfo("Biaoru", "BY", "biaoruskie"),
-            new CountryInfo("Boliwia", "BO", "boliwijskie"),
-            new CountryInfo("Bonia i Hercegowina", "BA", "boniackie"),
-            new CountryInfo("Botswana", "BW", "botswaskie"),
-            new CountryInfo("Brazylia", "BR", "brazylijskie"),
-            new CountryInfo("Brunei", "BN", "brunejskie"),
-            new CountryInfo("Bugaria", "BG", "bugarskie"),
-            new CountryInfo("Burkina Faso", "BF", "burkiskie"),
-            new CountryInfo("Burundi", "BI", "burundyjskie"),
-            new CountryInfo("Chile", "CL", "chilijskie"),
-            new CountryInfo("Chiny", "CN", "chiskie"),
-            new CountryInfo("Chorwacja", "HR", "chorwackie"),
-            new CountryInfo("Cypr", "CY", "cypryjskie"),
-            new CountryInfo("Czad", "TD", "czadyjskie"),
-            new CountryInfo("Czarnogra", "ME", "czarnogrskie"),
-            new CountryInfo("Czechy", "CZ", "czeskie"),
-            new CountryInfo("Dania", "DK", "duskie"),
-            new CountryInfo("Egipt", "EG", "egipskie"),
-            new CountryInfo("Ekwador", "EC", "ekwadorskie"),
-            new CountryInfo("Erytrea", "ER", "erytrejskie"),
-            new CountryInfo("Estonia", "EE", "estoskie"),
-            new CountryInfo("Etiopia", "ET", "etiopskie"),
-            new CountryInfo("Fidi", "FJ", "fidyjskie"),
-            new CountryInfo("Filipiny", "PH", "filipiskie"),
-            new CountryInfo("Finlandia", "FI", "fiskie"),
-            new CountryInfo("Francja", "FR", "francuskie"),
-            new CountryInfo("Gambia", "GM", "gambijskie"),
-            new CountryInfo("Ghana", "GH", "ghaskie"),
-            new CountryInfo("Grecja", "GR", "greckie"),
-            new CountryInfo("Gruzja", "GE", "gruziskie"),
-            new CountryInfo("Gwatemala", "GT", "gwatemalskie"),
-            new CountryInfo("Gwinea", "GN", "gwinejskie"),
-            new CountryInfo("Haiti", "HT", "haitaskie"),
-            new CountryInfo("Hiszpania", "ES", "hiszpaskie"),
-            new CountryInfo("Holandia", "NL", "holenderskie"),
-            new CountryInfo("Honduras", "HN", "honduraskie"),
-            new CountryInfo("Indie", "IN", "indyjskie"),
-            new CountryInfo("Indonezja", "ID", "indonezyjskie"),
-            new CountryInfo("Irak", "IQ", "irackie"),
-            new CountryInfo("Iran", "IR", "iraskie"),
-            new CountryInfo("Irlandia", "IE", "irlandzkie"),
-            new CountryInfo("Islandia", "IS", "islandzkie"),
-            new CountryInfo("Izrael", "IL", "izraelskie"),
-            new CountryInfo("Jamajka", "JM", "jamajskie"),
-            new CountryInfo("Japonia", "JP", "japoskie"),
-            new CountryInfo("Jemen", "YE", "jemeskie"),
-            new CountryInfo("Jordania", "JO", "jordaskie"),
-            new CountryInfo("Kamboda", "KH", "kambodaskie"),
-            new CountryInfo("Kamerun", "CM", "kameruskie"),
-            new CountryInfo("Kanada", "CA", "kanadyjskie"),
-            new CountryInfo("Katar", "QA", "katarskie"),
-            new CountryInfo("Kazachstan", "KZ", "kazachskie"),
-            new CountryInfo("Kenia", "KE", "kenijskie"),
-            new CountryInfo("Kirgistan", "KG", "kirgiskie"),
-            new CountryInfo("Kolumbia", "CO", "kolumbijskie"),
-            new CountryInfo("Kongo", "CG", "kongijskie"),
-            new CountryInfo("Korea Poudniowa", "KR", "poudniowokoreaskie"),
-            new CountryInfo("Kosowo", "XK", "kosowskie"),
-            new CountryInfo("Kostaryka", "CR", "kostarykaskie"),
-            new CountryInfo("Kuba", "CU", "kubaskie"),
-            new CountryInfo("Kuwejt", "KW", "kuwejckie"),
-            new CountryInfo("Laos", "LA", "laotaskie"),
-            new CountryInfo("Liban", "LB", "libaskie"),
-            new CountryInfo("Libia", "LY", "libijskie"),
-            new CountryInfo("Litwa", "LT", "litewskie"),
-            new CountryInfo("Luksemburg", "LU", "luksemburskie"),
-            new CountryInfo("otwa", "LV", "otewskie"),
-            new CountryInfo("Macedonia", "MK", "macedoskie"),
-            new CountryInfo("Madagaskar", "MG", "madagaskarskie"),
-            new CountryInfo("Malezja", "MY", "malezyjskie"),
-            new CountryInfo("Malta", "MT", "maltaskie"),
-            new CountryInfo("Maroko", "MA", "marokaskie"),
-            new CountryInfo("Mauretania", "MR", "mauretaskie"),
-            new CountryInfo("Meksyk", "MX", "meksykaskie"),
-            new CountryInfo("Modawia", "MD", "modawskie"),
-            new CountryInfo("Monako", "MC", "monakijskie"),
-            new CountryInfo("Mongolia", "MN", "mongolskie"),
-            new CountryInfo("Mozambik", "MZ", "mozambickie"),
-            new CountryInfo("Nepal", "NP", "nepalskie"),
-            new CountryInfo("Niemcy", "DE", "niemieckie"),
-            new CountryInfo("Niger", "NE", "nigerskie"),
-            new CountryInfo("Nigeria", "NG", "nigeryjskie"),
-            new CountryInfo("Nikaragua", "NI", "nikaraguaskie"),
-            new CountryInfo("Norwegia", "NO", "norweskie"),
-            new CountryInfo("Nowa Zelandia", "NZ", "nowozelandzkie"),
-            new CountryInfo("Oman", "OM", "omaskie"),
-            new CountryInfo("Pakistan", "PK", "pakistaskie"),
-            new CountryInfo("Panama", "PA", "panamskie"),
-            new CountryInfo("Papua-Nowa Gwinea", "PG", "papuaskie"),
-            new CountryInfo("Paragwaj", "PY", "paragwajskie"),
-            new CountryInfo("Peru", "PE", "peruwiaskie"),
-            new CountryInfo("Polska", "PL", "polskie"),
-            new CountryInfo("Portugalia", "PT", "portugalskie"),
-            new CountryInfo("Republika rodkowoafrykaska", "CF", "rodkowoafrykaskie"),
-            new CountryInfo("Rosja", "RU", "rosyjskie"),
-            new CountryInfo("Rumunia", "RO", "rumuskie"),
-            new CountryInfo("Rwanda", "RW", "rwandyjskie"),
-            new CountryInfo("Salwador", "SV", "salwadorskie"),
-            new CountryInfo("San Marino", "SM", "sanmaryskie"),
-            new CountryInfo("Senegal", "SN", "senegalskie"),
-            new CountryInfo("Serbia", "RS", "serbskie"),
-            new CountryInfo("Seszele", "SC", "seszelskie"),
-            new CountryInfo("Sowacja", "SK", "sowackie"),
-            new CountryInfo("Sowenia", "SI", "soweskie"),
-            new CountryInfo("Somalia", "SO", "somalijskie"),
-            new CountryInfo("Sri Lanka", "LK", "lankijskie"),
-            new CountryInfo("Stany Zjednoczone", "US", "amerykaskie"),
-            new CountryInfo("Sudan", "SD", "sudaskie"),
-            new CountryInfo("Syria", "SY", "syryjskie"),
-            new CountryInfo("Szwajcaria", "CH", "szwajcarskie"),
-            new CountryInfo("Szwecja", "SE", "szwedzkie"),
-            new CountryInfo("Tadykistan", "TJ", "tadyckie"),
-            new CountryInfo("Tajlandia", "TH", "tajlandzkie"),
-            new CountryInfo("Tanzania", "TZ", "tanzaskie"),
-            new CountryInfo("Togo", "TG", "togijskie"),
-            new CountryInfo("Tunezja", "TN", "tunezyjskie"),
-            new CountryInfo("Turcja", "TR", "tureckie"),
-            new CountryInfo("Turkmenistan", "TM", "turkmeskie"),
-            new CountryInfo("Uganda", "UG", "ugandyjskie"),
-            new CountryInfo("Ukraina", "UA", "ukraiskie"),
-            new CountryInfo("Urugwaj", "UY", "urugwajskie"),
-            new CountryInfo("Uzbekistan", "UZ", "uzbeckie"),
-            new CountryInfo("Watykan", "VA", "watykaskie"),
-            new CountryInfo("Wenezuela", "VE", "wenezuelskie"),
-            new CountryInfo("Wgry", "HU", "wgierskie"),
-            new CountryInfo("Wielka Brytania", "GB", "brytyjskie"),
-            new CountryInfo("Wietnam", "VN", "wietnamskie"),
-            new CountryInfo("Wochy", "IT", "woskie"),
-            new CountryInfo("Wybrzee Koci Soniowej", "CI", "iworyjskie"),
-            new CountryInfo("Zambia", "ZM", "zambijskie"),
-            new CountryInfo("Zimbabwe", "ZW", "zimbabwe"),
-            new CountryInfo("Zjednoczone Emiraty Arabskie", "AE", "emirackie"),
-            new CountryInfo("Bezpastwowiec", "00", "bezpastwowiec")
-        };
     public static class WpfWarningResolverDialog
     {
         public static DateTime? RozwiazDataUrodzenia(string nazwisko, string imie, DateTime peselDate, DateTime excelDate)
@@ -2102,7 +1665,6 @@ namespace HrAppka_Import_Pracowników
             });
             return chosen;
         }
-    }
     }
 }
 
