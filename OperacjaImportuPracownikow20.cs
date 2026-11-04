@@ -19,6 +19,7 @@ using InsERT.Moria.Waluty;
 using Microsoft.Win32;
 using MiniExcelLibs;
 using HrAppka_Import_Pracowników.Services;
+using HrAppka_Import_Pracowników.UI.Services;
 
 namespace HrAppka_Import_Pracowników
 {
@@ -32,11 +33,11 @@ namespace HrAppka_Import_Pracowników
         // ?? ????????? ???????, ????? ????????? ????????????? ? ?????????? ???? ?????? Pracownicy
         protected override string[]? SciezkaWMenu => null;
 
-        // ????? ?????? ???? ? Gratyfikant Nexo Pro
-        public override string Nazwa => "Importuj z HrAppka";
+        // Nazwa pozycji menu w Gratyfikant Nexo Pro
+        public override string Nazwa => "Import Pracowników";
 
         /// <summary>
-        /// ????? ????????????/?????????? ?????? ???? ? UI Gratyfikant Nexo Pro.
+        /// Logika sprawdzania/odblokowania pozycji menu w UI Gratyfikant Nexo Pro.
         /// </summary>
         protected override bool SprawdzCzyMoznaWykonac(
             IReadOnlyCollection<int> identyfikatoryWybranychElementow,
@@ -47,7 +48,7 @@ namespace HrAppka_Import_Pracowników
         }
 
         /// <summary>
-        /// ????? ????? ???????? ??????? 2.0.
+        /// Główny punkt wykonania operacji 2.0.
         /// </summary>
         protected override void Wykonaj(
             IReadOnlyCollection<int> identyfikatoryWybranychElementow,
@@ -55,7 +56,7 @@ namespace HrAppka_Import_Pracowników
             IKontekstOperacji kontekstOperacji)
         {
             var uchwyt = kontekstOperacji.Uchwyt;
-            LogNexo.Informacja("[Import 2.0] Rozpoczto operacj Import 2.0 (Sfera Native)");
+            LogNexo.Informacja("[Import Pracowników 2.0] Rozpoczęto operację Import Pracowników (Sfera Native)");
 
             // 1. ????????? ??????? ?????? ????? Excel
             if (!PodajOSciezkeDoPliku(out string sciezka))
@@ -91,20 +92,80 @@ namespace HrAppka_Import_Pracowników
                 return;
             }
 
-            // 2. ?????????? ?????? ? ???'??? ?? ????????? Sfera Manager
-            LogNexo.Informacja("[Import 2.0] Rozpoczto wstpn analiz wierszy i walidacj PESEL/Paszport...");
+            // 2. Pre-cache i wstępna analiza wierszy (Wymaganie R7)
+            LogNexo.Informacja("[Import 2.0] Inicjalizacja bufora słownikowego SferaDictionaryCache...");
+            SferaDictionaryCache.Instance.Initialize(uchwyt);
+
+            LogNexo.Informacja("[Import 2.0] Rozpoczęto wstępną analizę wierszy i walidację PESEL/Paszport...");
             PreAnalyzeRows(uchwyt, rows);
 
-            // 3. ???????????? ????????? ????? ??????? ??????? nexo (IOknoOperacjiZbiorczej)
-            var okno = uchwyt.PodajObiektTypu<IOknoOperacjiZbiorczej>();
-            okno.Tytul = "Import 2.0 z HrAppka (Sfera Native)";
-            okno.TekstPrzyciskuWykonaj = "Uruchom Import 2.0";
+            // 3. Modalne okno WPF ImportPreviewWindow (Wymaganie R6)
+            LogNexo.Informacja("[Import Pracowników 2.0] Otwieranie modalnego okna WPF ImportPreviewWindow...");
+            var pendingZusRequests = new List<ZusRegistrationRequest>();
+            bool importExecuted = false;
 
-            LogNexo.Informacja("[Import 2.0] Otwieranie nexowego okna operacji zbiorczej.");
-            okno.Pokaz(rows, item => ZaimportujRow20(kontekstOperacji, item));
+            ModalWindowHostingService.ShowModal(() =>
+            {
+                var previewWindow = new UI.ImportPreviewWindow(
+                    uchwyt: uchwyt,
+                    rows: rows,
+                    onExecuteImportAsync: async (selectedRows, progress, cancellationToken) =>
+                    {
+                        importExecuted = true;
+                        int total = selectedRows.Count;
+                        int current = 0;
 
-            // 4. ?????????? ???????????? ??? ?????????
-            PokazPodsumowanieImportu(kontekstOperacji, rows);
+                        foreach (var row in selectedRows)
+                        {
+                            if (cancellationToken.IsCancellationRequested)
+                            {
+                                LogNexo.Informacja("[Import Pracowników 2.0] Przerwano import na żądanie użytkownika.");
+                                break;
+                            }
+
+                            current++;
+                            string employeeDesc = $"{row.Nazwisko} {row.Imie}".Trim();
+                            progress.Report(new ImportProgressReport(current, total, employeeDesc, $"Przetwarzanie wiersza {current} z {total}..."));
+
+                            try
+                            {
+                                var wynik = ZaimportujRow20(kontekstOperacji, row, uchwyt, pendingZusRequests);
+                                bool success = (wynik != null && wynik.Status == StatusOperacji.ZakonczonaPowodzeniem);
+                                string statusMsg = success ? (wynik?.Komunikat ?? "Pomyślnie zaimportowano") : (wynik?.Komunikat ?? "Wystąpił błąd");
+                                progress.Report(new ImportProgressReport(current, total, employeeDesc, statusMsg));
+                            }
+                            catch (Exception ex)
+                            {
+                                row.Status = "Błąd";
+                                row.Ostrzezenia += ex.Message + " ";
+                                progress.Report(new ImportProgressReport(current, total, employeeDesc, $"Błąd: {ex.Message}"));
+                            }
+                        }
+
+                        // Zbiorczy zapis deklaracji ZUS na zakończenie pętli (Wymaganie R7)
+                        if (pendingZusRequests.Any() && !cancellationToken.IsCancellationRequested)
+                        {
+                            progress.Report(new ImportProgressReport(total, total, "Deklaracje ZUS", "Zbiorczy zapis deklaracji zgłoszeniowych ZUS..."));
+                            var zusResult = ZusDeclarationBatchService.ProcessAndSaveBatch(
+                                uchwyt,
+                                pendingZusRequests,
+                                msg => LogNexo.Informacja($"[Import Pracowników 2.0] {msg}"));
+
+                            if (!zusResult.Success)
+                            {
+                                LogNexo.Informacja($"[Import Pracowników 2.0] Ostrzeżenie zapisu ZUS: {string.Join("; ", zusResult.Errors)}");
+                            }
+                        }
+                    });
+
+                return previewWindow;
+            });
+
+            // 4. Podsumowanie dla użytkownika (jeżeli import został uruchomiony)
+            if (importExecuted)
+            {
+                PokazPodsumowanieImportu(kontekstOperacji, rows);
+            }
         }
 
         private bool PodajOSciezkeDoPliku(out string sciezka)
@@ -283,23 +344,34 @@ namespace HrAppka_Import_Pracowników
 
         public static void PreAnalyzeRows(IUchwyt uchwyt, List<PracownikImportRow> rows)
         {
-            var podmioty = uchwyt.Podmioty();
-            var existingPesels = new HashSet<string>(
-                podmioty.Dane.WszyscyPracownicy()
-                    .Where(p => p.Osoba != null && !string.IsNullOrEmpty(p.Osoba.PESEL))
-                    .Select(p => p.Osoba.PESEL),
-                StringComparer.OrdinalIgnoreCase
-            );
+            if (!SferaDictionaryCache.Instance.IsInitialized)
+            {
+                SferaDictionaryCache.Instance.Initialize(uchwyt);
+            }
 
-            var existingPassports = new HashSet<string>(
-                podmioty.Dane.WszyscyPracownicy()
-                    .Where(p => p.Osoba != null && !string.IsNullOrEmpty(p.Osoba.SeriaINumerDokumentuTozsamosci))
-                    .Select(p => p.Osoba.SeriaINumerDokumentuTozsamosci),
-                StringComparer.OrdinalIgnoreCase
-            );
+            var existingPesels = SferaDictionaryCache.Instance.ExistingByPesel;
+            var existingPassports = SferaDictionaryCache.Instance.ExistingByPassport;
+            var defaultTemplate = ContractCreationService.Instance.GetDefaultTemplate(uchwyt);
 
             foreach (var row in rows)
             {
+                if (row.SelectedSzablonUmowy == null && defaultTemplate != null)
+                {
+                    row.SelectedSzablonUmowy = defaultTemplate;
+                }
+
+                if (!string.IsNullOrWhiteSpace(row.UrzadSkarbowy))
+                {
+                    var organ = SferaDictionaryCache.Instance.ResolveTaxOffice(uchwyt, row.UrzadSkarbowy);
+                    if (organ != null)
+                    {
+                        row.SelectedOrganPodatkowy = organ;
+                    }
+                    else
+                    {
+                        row.Ostrzezenia += $"Nie rozpoznano urzędu skarbowego '{row.UrzadSkarbowy}'. ";
+                    }
+                }
                 if (string.IsNullOrWhiteSpace(row.Pesel))
                 {
                     if (string.IsNullOrWhiteSpace(row.Paszport))
@@ -309,7 +381,7 @@ namespace HrAppka_Import_Pracowników
                     }
                     else
                     {
-                        if (existingPassports.Contains(row.Paszport))
+                        if (existingPassports.ContainsKey(row.Paszport))
                         {
                             row.Ostrzezenia += "Pracownik z tym paszportem już istnieje w bazie. ";
                             row.Status = "Istnieje w bazie";
@@ -350,7 +422,7 @@ namespace HrAppka_Import_Pracowników
                         }
                     }
 
-                    if (existingPesels.Contains(row.Pesel))
+                    if (existingPesels.ContainsKey(row.Pesel))
                     {
                         row.Ostrzezenia += "Pracownik z tym PESEL już istnieje w bazie. ";
                         row.Status = "Istnieje w bazie";
@@ -399,7 +471,11 @@ namespace HrAppka_Import_Pracowników
             }
         }
 
-        public static WynikOperacji ZaimportujRow20(IKontekstOperacji? kontekstOperacji, PracownikImportRow item, IUchwyt? fallbackUchwyt = null)
+        public static WynikOperacji ZaimportujRow20(
+            IKontekstOperacji? kontekstOperacji,
+            PracownikImportRow item,
+            IUchwyt? fallbackUchwyt = null,
+            List<ZusRegistrationRequest>? pendingZusBatch = null)
         {
             var uchwyt = kontekstOperacji?.Uchwyt ?? fallbackUchwyt;
             if (uchwyt == null) throw new ArgumentNullException(nameof(fallbackUchwyt), "Uchwyt Sfera SDK jest wymagany.");
@@ -434,79 +510,114 @@ namespace HrAppka_Import_Pracowników
 
                 var podmiotyMgr = uchwyt.Podmioty();
 
-                // A. ????? ?? 3-??????? ????????????? ?????? Osoba / Pracownik
+                // A. Sprawdzenie w buforze pamięci i pobranie osoby (Wymaganie R7 - eliminacja N+1)
                 Podmiot? existingOsoba = null;
-                if (!string.IsNullOrWhiteSpace(item.Pesel))
+                ExistingPersonInfo? personInfo = null;
+
+                if (!string.IsNullOrWhiteSpace(item.Pesel) && SferaDictionaryCache.Instance.TryGetExistingPersonByPesel(item.Pesel, out personInfo))
                 {
-                    existingOsoba = podmiotyMgr.Dane.WszystkieOsoby()
-                        .FirstOrDefault(p => p.Osoba != null && p.Osoba.PESEL == item.Pesel);
+                    existingOsoba = podmiotyMgr.Dane.WszystkieOsoby().FirstOrDefault(p => p.Id == personInfo.PodmiotId);
                 }
-                else if (!string.IsNullOrWhiteSpace(item.Paszport))
+                else if (!string.IsNullOrWhiteSpace(item.Paszport) && SferaDictionaryCache.Instance.TryGetExistingPersonByPassport(item.Paszport, out personInfo))
                 {
-                    existingOsoba = podmiotyMgr.Dane.WszystkieOsoby()
-                        .FirstOrDefault(p => p.Osoba != null && p.Osoba.SeriaINumerDokumentuTozsamosci == item.Paszport);
+                    existingOsoba = podmiotyMgr.Dane.WszystkieOsoby().FirstOrDefault(p => p.Id == personInfo.PodmiotId);
                 }
 
-                IPodmiot pracownikBO;
-                if (existingOsoba != null)
+                // Obsługa decyzji PominWiersz dla istniejącej kartoteki pracownika
+                if (existingOsoba != null && item.DecyzjaDlaIstniejacego == DecyzjaIstniejacyPracownik.PominWiersz)
                 {
-                    if (existingOsoba.Osoba.Pracownik != null)
-                    {
-                        LogNexo.Informacja($"[Import 2.0] Ga 1: Znaleziono istniejcego pracownika (ID: {existingOsoba.Id}). Znajdz().");
-                        pracownikBO = podmiotyMgr.Znajdz(existingOsoba);
-                    }
-                    else
-                    {
-                        LogNexo.Informacja($"[Import 2.0] Ga 2: Znaleziono osob (ID: {existingOsoba.Id}) bez roli pracownika. PrzeksztalcOsobeNaPracownika().");
-                        pracownikBO = podmiotyMgr.PrzeksztalcOsobeNaPracownika(existingOsoba);
-                    }
-                }
-                else
-                {
-                    LogNexo.Informacja("[Import 2.0] Ga 3: Tworzenie nowego pracownika via UtworzPracownika() z AutoSymbol().");
-                    pracownikBO = podmiotyMgr.UtworzPracownika();
-                    pracownikBO.AutoSymbol();
+                    item.Status = "Pominięty (Duplikat)";
+                    LogNexo.Informacja($"[Import 2.0] Pominięto pracownika {item.Imie} {item.Nazwisko} (ID: {existingOsoba.Id}) na żądanie użytkownika (PominWiersz).");
+                    return WynikOperacji.ZakonczonaPowodzeniem("Pominięty (Duplikat) - pominięto na żądanie użytkownika.");
                 }
 
                 Podmiot savedEmployeePodmiot;
 
-                using (pracownikBO)
+                if (existingOsoba != null && item.DecyzjaDlaIstniejacego == DecyzjaIstniejacyPracownik.TylkoDodajUmowe)
                 {
-                    var podmiot = pracownikBO.Dane;
-                    var osoba = podmiot.Osoba;
-
-                    // 1. Organ Podatkowy (Urzd Skarbowy)
-                    if (!string.IsNullOrWhiteSpace(item.UrzadSkarbowy))
+                    LogNexo.Informacja($"[Import 2.0] Decyzja TylkoDodajUmowe dla pracownika ID={existingOsoba.Id} - zachowanie istniejącej kartoteki.");
+                    if (existingOsoba.Osoba?.Pracownik == null)
                     {
-                        LogNexo.Informacja($"[Import 2.0] Resolving Urzd Skarbowy '{item.UrzadSkarbowy}'");
-                        var organ = ResolveOrganPodatkowy(uchwyt, item.UrzadSkarbowy);
-                        if (organ != null)
+                        using (var bo = podmiotyMgr.PrzeksztalcOsobeNaPracownika(existingOsoba))
                         {
-                            podmiot.OrganPodatkowy = organ;
-                            LogNexo.Informacja($"[Import 2.0] Przypisano Urzd Skarbowy: {organ.Firma?.Nazwa ?? item.UrzadSkarbowy}");
-                        }
-                        else
-                        {
-                            podmiot.OrganPodatkowy = null;
-                            string note = $"US wskazany pracownikiem - \"{item.UrzadSkarbowy.Trim()}\"";
-                            if (string.IsNullOrWhiteSpace(podmiot.Uwagi))
+                            if (!bo.Zapisz())
                             {
-                                podmiot.Uwagi = note;
+                                string errs = GetDetailedUowErrors(bo, uchwyt);
+                                return WynikOperacji.ZakonczonaNiepowodzeniem($"Błąd przekształcania osoby w pracownika: {errs}");
                             }
-                            else if (!podmiot.Uwagi.Contains("US wskazany pracownikiem"))
-                            {
-                                podmiot.Uwagi = (podmiot.Uwagi + "; " + note).Trim();
-                                if (podmiot.Uwagi.Length > 256)
-                                    podmiot.Uwagi = podmiot.Uwagi.Substring(0, 256);
-                            }
-                            item.Ostrzezenia += $"Nie znaleziono urzdu skarbowego '{item.UrzadSkarbowy}' w bazie. Pozostawiono pustym, zapisano w uwagach. ";
-                            LogNexo.Informacja($"[Import 2.0] Nie znaleziono urzdu skarbowego '{item.UrzadSkarbowy}'. Zapisano w uwagach.");
+                            savedEmployeePodmiot = bo.Dane;
                         }
                     }
                     else
                     {
-                        podmiot.OrganPodatkowy = null;
+                        savedEmployeePodmiot = existingOsoba;
                     }
+                }
+                else
+                {
+                    IPodmiot pracownikBO;
+                    if (existingOsoba != null)
+                    {
+                        if (existingOsoba.Osoba?.Pracownik != null)
+                        {
+                            LogNexo.Informacja($"[Import 2.0] Ga 1: Znaleziono istniejcego pracownika (ID: {existingOsoba.Id}). Znajdz().");
+                            pracownikBO = podmiotyMgr.Znajdz(existingOsoba);
+                        }
+                        else
+                        {
+                            LogNexo.Informacja($"[Import 2.0] Ga 2: Znaleziono osob (ID: {existingOsoba.Id}) bez roli pracownika. PrzeksztalcOsobeNaPracownika().");
+                            pracownikBO = podmiotyMgr.PrzeksztalcOsobeNaPracownika(existingOsoba);
+                        }
+                    }
+                    else
+                    {
+                        LogNexo.Informacja("[Import 2.0] Ga 3: Tworzenie nowego pracownika via UtworzPracownika() z AutoSymbol().");
+                        pracownikBO = podmiotyMgr.UtworzPracownika();
+                        pracownikBO.AutoSymbol();
+                    }
+
+                    using (pracownikBO)
+                    {
+                        var podmiot = pracownikBO.Dane;
+                        var osoba = podmiot.Osoba;
+
+                        // 1. Organ Podatkowy (Urzd Skarbowy) - przez wybór UI lub bufor w pamięci (Wymaganie R6 & R7)
+                        if (item.SelectedOrganPodatkowy != null)
+                        {
+                            podmiot.OrganPodatkowy = item.SelectedOrganPodatkowy;
+                            LogNexo.Informacja($"[Import 2.0] Przypisano Urzd Skarbowy wybrany w UI: {item.SelectedOrganPodatkowy.Firma?.Nazwa ?? item.SelectedOrganPodatkowy.Kod}");
+                        }
+                        else if (!string.IsNullOrWhiteSpace(item.UrzadSkarbowy))
+                        {
+                            LogNexo.Informacja($"[Import 2.0] Resolving Urzd Skarbowy '{item.UrzadSkarbowy}'");
+                            var organ = SferaDictionaryCache.Instance.ResolveTaxOffice(uchwyt, item.UrzadSkarbowy);
+                            if (organ != null)
+                            {
+                                podmiot.OrganPodatkowy = organ;
+                                LogNexo.Informacja($"[Import 2.0] Przypisano Urzd Skarbowy: {organ.Firma?.Nazwa ?? item.UrzadSkarbowy}");
+                            }
+                            else
+                            {
+                                podmiot.OrganPodatkowy = null;
+                                string note = $"US wskazany pracownikiem - \"{item.UrzadSkarbowy.Trim()}\"";
+                                if (string.IsNullOrWhiteSpace(podmiot.Uwagi))
+                                {
+                                    podmiot.Uwagi = note;
+                                }
+                                else if (!podmiot.Uwagi.Contains("US wskazany pracownikiem"))
+                                {
+                                    podmiot.Uwagi = (podmiot.Uwagi + "; " + note).Trim();
+                                    if (podmiot.Uwagi.Length > 256)
+                                        podmiot.Uwagi = podmiot.Uwagi.Substring(0, 256);
+                                }
+                                item.Ostrzezenia += $"Nie znaleziono urzdu skarbowego '{item.UrzadSkarbowy}' w bazie. Pozostawiono pustym, zapisano w uwagach. ";
+                                LogNexo.Informacja($"[Import 2.0] Nie znaleziono urzdu skarbowego '{item.UrzadSkarbowy}'. Zapisano w uwagach.");
+                            }
+                        }
+                        else
+                        {
+                            podmiot.OrganPodatkowy = null;
+                        }
 
                     // 2. Personal Details & Name Splitting (SplitNames with Foreign Letter Normalization)
                     string normImie = NormalizeForeignLetters(PeselHelper.NormalizeWhitespace(item.Imie));
@@ -773,152 +884,111 @@ namespace HrAppka_Import_Pracowników
                     }
 
                     savedEmployeePodmiot = pracownikBO.Dane;
-                    LogNexo.Informacja($"[Import 2.0] Pomylnie zapisano kart pracownika: {item.Imie} {item.Nazwisko} (ID={savedEmployeePodmiot.Id})");
-                }
+                    LogNexo.Informacja($"[Import 2.0] Pomyślnie zapisano kartę pracownika: {item.Imie} {item.Nazwisko} (ID={savedEmployeePodmiot.Id})");
 
-                // C. ????????? ?? ???????????? umowy cywilnoprawnej (Umowa Cywilnoprawna)
+                    // Rejestracja w buforze pamięci w trakcie przetwarzania pliku
+                    SferaDictionaryCache.Instance.RegisterNewPerson(
+                        savedEmployeePodmiot.Id,
+                        item.Pesel,
+                        item.Paszport,
+                        savedEmployeePodmiot.Osoba?.Pracownik != null);
+                }
+            }
+
+                // C. Tworzenie umowy na podstawie szablonu (Wymaganie R2 & R6 & R7)
                 if (item.Status == "Aktualizacja (Dane)")
                 {
-                    LogNexo.Informacja($"[Import 2.0] Pominito tworzenie umowy dla {item.Imie} {item.Nazwisko} - umowa ju istnieje.");
+                    LogNexo.Informacja($"[Import 2.0] Pominięto tworzenie umowy dla {item.Imie} {item.Nazwisko} - umowa już istnieje.");
                 }
                 else if (!string.IsNullOrWhiteSpace(item.DataRozpoczecia) && DateTime.TryParse(item.DataRozpoczecia, out DateTime dtStart))
                 {
-                    DateTime? dtEnd = DateTime.TryParse(item.DataZakonczenia, out DateTime endParsed) ? endParsed : null;
-                    DateTime dtSign = DateTime.TryParse(item.DataZawarcia, out DateTime signParsed) ? signParsed : dtStart;
-
-                    var umowaZlecenieTyp = uchwyt.TypyUmowPracowniczych().Dane.Wszystkie().FirstOrDefault(x => x.Nazwa == "Umowa zlecenie");
-                    if (umowaZlecenieTyp == null)
+                    try
                     {
-                        string noTypeMsg = "Nie znaleziono typu umowy 'Umowa zlecenie' w bazie nexo.";
-                        LogNexo.Informacja($"[Import 2.0] {noTypeMsg}");
-                        item.Status = "Bd (Brak typu umowy)";
-                        item.Ostrzezenia += noTypeMsg + " ";
-                        return WynikOperacji.ZakonczonaNiepowodzeniem(noTypeMsg);
-                    }
-
-                    using (var umowaBO = uchwyt.UmowyPracowniczeGr().Utworz(umowaZlecenieTyp))
-                    {
-                        var u = umowaBO.Dane;
-                        u.Pracownik = savedEmployeePodmiot.Osoba.Pracownik;
-
-                        u.RodzajUmowyPracowniczej = umowaZlecenieTyp.DozwoloneRodzajeUmowyPracowniczej
-                            .FirstOrDefault(x => string.Equals(x.Nazwa, "Na czas określony", StringComparison.OrdinalIgnoreCase)) 
-                            ?? umowaZlecenieTyp.DozwoloneRodzajeUmowyPracowniczej.FirstOrDefault();
-                        u.WzorzecTresciUmowyPracowniczej = uchwyt.TresciWydrukuRTF().DaneDomyslne.UCPZlecenieStale;
-
-                        if (u.OkresObowiazywania == null)
-                            u.OkresObowiazywania = new OkresWymaganyLewostronnie();
-                        u.OkresObowiazywania.DataPoczatkowa = dtStart;
-                        u.OkresObowiazywania.DataKoncowa = dtEnd;
-                        u.DataSporzadzenia = dtSign;
-
-                        // Calculate age & student status (ZUS / PIT)
-                        int age = PeselHelper.CalculateAge(finalBirthDate ?? DateTime.MinValue, dtStart);
-                        bool studentFlag = string.Equals(item.JestStudentem, "Tak", StringComparison.OrdinalIgnoreCase);
-                        bool ageUnder26 = age < 26;
-                        bool isStudentUnder26 = studentFlag && ageUnder26;
-                        bool isZusSubject = !isStudentUnder26;
-
-                        u.RaportZUS = (byte)(isStudentUnder26 ? InsERT.Moria.Kadry.TypRaportuZUS.Brak : InsERT.Moria.Kadry.TypRaportuZUS.RCA);
-                        u.NaliczaSkladkiEmerytalne = isZusSubject;
-                        u.NaliczaSkladkiRentowe = isZusSubject;
-                        u.NaliczaSkladkiZdrowotne = isZusSubject;
-                        u.NaliczaSkladkiWypadkowe = isZusSubject;
-                        u.NaliczaSkladkiFP = isZusSubject;
-                        u.NaliczaSkladkiFGSP = isZusSubject;
-                        u.NaliczaSkladkiChorobowe = false;
-
-                        u.StosujZwolnienieZPITDo26Lat = null;
-
-                        // Limits
-                        if (u.NaliczaSkladkiZdrowotne) u.NieOgraniczaZdrowotnego = false;
-                        if (u.NaliczaSkladkiChorobowe) u.NieOgraniczaChorobowego = false;
-                        if (u.NaliczaSkladkiFP) u.NaliczaSkladkiFPTylkoPowyzejMinimalnej = isZusSubject;
-
-                        // PIT & Relief
-                        try
+                        var subDept = DepartmentResolver.ResolveDepartment(uchwyt, item.DzialNazwa);
+                        var defaultTemplate = ContractCreationService.Instance.GetDefaultTemplate(uchwyt);
+                        
+                        int templateId = 0;
+                        if (item.SelectedSzablonUmowy is SzablonUmowyItem userTemplate && userTemplate.Id > 0)
                         {
-                            var targetZaliczka = (byte)(ageUnder26 
-                                ? SposobPobieraniaZaliczkiNaPodatekNaUmowie.WgUstawienPracownika 
-                                : SposobPobieraniaZaliczkiNaPodatekNaUmowie.NiePobierajDoKwotyWolnej);
-                            if (u.ZaliczkaNaPodatek != targetZaliczka) u.ZaliczkaNaPodatek = targetZaliczka;
-
-                            var targetUlga = (byte)SposobOdliczaniaUlgiPodatkowejNaUmowie.WgUstawienPracownika;
-                            if (u.UlgaPodatkowa != targetUlga) u.UlgaPodatkowa = targetUlga;
+                            templateId = userTemplate.Id;
+                            LogNexo.Informacja($"[Import 2.0] Użyto szablonu umowy wybranego w UI: '{userTemplate.Nazwa}' (ID={templateId})");
                         }
-                        catch (Exception ex)
+                        else if (item.SelectedSzablonUmowy is int intTemplateId && intTemplateId > 0)
                         {
-                            LogNexo.Informacja($"[Import 2.0] Ignorowano bd ustawiania PIT: {ex.Message}");
+                            templateId = intTemplateId;
+                            LogNexo.Informacja($"[Import 2.0] Użyto szablonu umowy ID={templateId} wskazanego w UI");
+                        }
+                        else
+                        {
+                            templateId = defaultTemplate?.Id ?? 0;
+                            LogNexo.Informacja($"[Import 2.0] Użyto domyślnego szablonu umowy: '{defaultTemplate?.Nazwa}' (ID={templateId})");
                         }
 
-                        // Schedule & Wage rates
-                        try
+                        // Obsługa decyzji NadpiszUmowe: zamknięcie poprzedniej aktywnej umowy pracownika przed dtStart
+                        if (item.DecyzjaDlaIstniejacego == DecyzjaIstniejacyPracownik.NadpiszUmowe && savedEmployeePodmiot.Osoba?.Pracownik != null)
                         {
-                            var targetWyplata = (byte)WyplacanieWynagrodzenia.CoMiesiac;
-                            if (u.WyplacaWynagrodzenie != targetWyplata) u.WyplacaWynagrodzenie = targetWyplata;
-                            if (u.DataRachunkuPrzesuniecie != 25) u.DataRachunkuPrzesuniecie = 25;
-                            if (u.PrzesuniecieNaliczenia != 0) u.PrzesuniecieNaliczenia = 0;
-                        }
-                        catch (Exception ex)
-                        {
-                            LogNexo.Informacja($"[Import 2.0] Ignorowano bd harmonogramu wypat: {ex.Message}");
-                        }
-
-                        foreach (var sp in u.SkladnikiPlacowe)
-                        {
-                            foreach (var val in sp.Wartosci)
+                            var existingContracts = uchwyt.UmowyPracowniczeGr().Dane.Wszystkie()
+                                .Where(x => x.Pracownik != null && x.Pracownik.Id == savedEmployeePodmiot.Osoba.Pracownik.Id && !x.IsInRecycleBin)
+                                .ToList();
+                            foreach (var ec in existingContracts)
                             {
-                                val.Wartosc = 0.00m;
+                                using (var ecBO = uchwyt.UmowyPracowniczeGr().Znajdz(ec))
+                                {
+                                    if (ecBO != null)
+                                    {
+                                        if (ecBO.Dane.OkresObowiazywania != null && (!ecBO.Dane.OkresObowiazywania.DataKoncowa.HasValue || ecBO.Dane.OkresObowiazywania.DataKoncowa.Value >= dtStart))
+                                        {
+                                            ecBO.Dane.OkresObowiazywania.DataKoncowa = dtStart > DateTime.MinValue ? dtStart.AddDays(-1) : dtStart;
+                                            ecBO.Zapisz();
+                                            LogNexo.Informacja($"[Import 2.0] Nadpisanie umowy: zakończono poprzednią umowę ID={ec.Id} z dniem {ecBO.Dane.OkresObowiazywania.DataKoncowa:yyyy-MM-dd}");
+                                        }
+                                    }
+                                }
                             }
                         }
 
-                        // Dzia / Department
-                        var subDept = DepartmentResolver.ResolveDepartment(uchwyt, item.DzialNazwa);
-                        if (subDept != null)
-                        {
-                            var st = new StanowiskoWUmowiePracowniczej();
-                            u.Stanowiska.Add(st);
-                            st.DataOd = dtStart;
-                            st.JednostkaOrganizacyjna = subDept;
-                            st.LP = 1;
-                        }
+                        var u = ContractCreationService.Instance.CreateContract(
+                            uchwyt,
+                            savedEmployeePodmiot,
+                            item,
+                            templateId,
+                            subDept);
 
-                        // Occupation / Kod zawodu
-                        if (!string.IsNullOrWhiteSpace(item.KodZawodu))
-                        {
-                            var zawod = LookupZawod(uchwyt, item.KodZawodu);
-                            if (zawod != null) u.Zawod = zawod;
-                        }
+                        string szablonNazwa = (item.SelectedSzablonUmowy as SzablonUmowyItem)?.Nazwa ?? defaultTemplate?.Nazwa ?? templateId.ToString();
+                        LogNexo.Informacja($"[Import 2.0] Pomyślnie utworzono umowę (ID={u.Id}) na podstawie szablonu '{szablonNazwa}' dla {item.Imie} {item.Nazwisko}");
 
-                        // Flaga wlasna (OPODATKOWANE / NIEOPODATKOWANE)
-                        try
-                        {
-                            string flagName = isStudentUnder26 ? "NIEOPODATKOWANE" : "OPODATKOWANE";
-                            var flag = LookupFlagaWlasna(uchwyt, flagName);
-                            if (flag != null) u.FlagaWlasna = flag;
-                            else item.Ostrzezenia += $"Nie znaleziono flagi własnej '{flagName}' w bazie. ";
-                        }
-                        catch (Exception ex)
-                        {
-                            item.Ostrzezenia += $"Błąd przypisywania flagi własnej: {ex.Message}. ";
-                        }
-
-                        if (!umowaBO.Zapisz())
-                        {
-                            string contractErrors = GetDetailedUowErrors(umowaBO, uchwyt);
-                            LogNexo.Informacja($"[Import 2.0] Bd zapisu umowy dla {item.Imie} {item.Nazwisko}: {contractErrors}");
-                            item.Status = "Bd zapisu umowy";
-                            item.Ostrzezenia += contractErrors + " ";
-                            return WynikOperacji.ZakonczonaNiepowodzeniem($"Karta pracownika utworzona, lecz bd zapisu umowy: {contractErrors}");
-                        }
-
-                        LogNexo.Informacja($"[Import 2.0] Pomylnie zapisano umow dla {item.Imie} {item.Nazwisko}");
-
-                        // ZUS Declaration ZUA (if RCA)
+                        // Rejestracja do zbiorczej deklaracji ZUS (Wymaganie R7)
                         if (u.RaportZUS == (byte)InsERT.Moria.Kadry.TypRaportuZUS.RCA)
                         {
-                            DodajZgloszenieZus(uchwyt, savedEmployeePodmiot, u, item);
+                            bool isZza = !u.NaliczaSkladkiEmerytalne && u.NaliczaSkladkiZdrowotne;
+                            var zusReq = new ZusRegistrationRequest(
+                                Contract: u,
+                                Employee: savedEmployeePodmiot.Osoba?.Pracownik ?? new Pracownik(),
+                                IsZzaOnly: isZza,
+                                StartDate: u.OkresObowiazywania?.DataPoczatkowa ?? dtStart,
+                                PlacEmerytalna: u.NaliczaSkladkiEmerytalne,
+                                PlacRentowa: u.NaliczaSkladkiRentowe,
+                                PlacChorobowa: u.NaliczaSkladkiChorobowe,
+                                PlacWypadkowa: u.NaliczaSkladkiWypadkowe
+                            );
+
+                            if (pendingZusBatch != null)
+                            {
+                                pendingZusBatch.Add(zusReq);
+                            }
+                            else
+                            {
+                                // Gdy operacja wywoływana pojedynczo poza pętlą
+                                ZusDeclarationBatchService.ProcessAndSaveBatch(uchwyt, new[] { zusReq });
+                            }
                         }
+                    }
+                    catch (Exception contractEx)
+                    {
+                        LogNexo.Informacja($"[Import 2.0] Błąd zapisu umowy dla {item.Imie} {item.Nazwisko}: {contractEx.Message}");
+                        item.Status = "Błąd zapisu umowy";
+                        item.Ostrzezenia += contractEx.Message + " ";
+                        return WynikOperacji.ZakonczonaNiepowodzeniem($"Karta pracownika utworzona, lecz błąd zapisu umowy: {contractEx.Message}");
                     }
                 }
 
@@ -953,108 +1023,20 @@ namespace HrAppka_Import_Pracowników
         {
             try
             {
-                var dekZusMgr = uchwyt.PodajObiektTypu<IDeklaracjeZUS>();
-                var existingDecl = dekZusMgr.Dane.Wszystkie()
-                    .Where(d => d.RodzajDeklaracji == (byte)RodzajDeklaracjiZUS.Zgloszeniowa 
-                             && d.StatusWysylki == (byte)StatusWysylkiDeklaracjiZUS.Brak
-                             && !d.WyslanyDoPlatnika)
-                    .OrderByDescending(d => d.Id)
-                    .FirstOrDefault();
-
-                IDeklaracjaZUS deklBO = existingDecl != null ? dekZusMgr.Znajdz(existingDecl) : dekZusMgr.UtworzDeklaracjeZgloszeniowa();
-
-                using (deklBO)
-                {
-                    bool alreadyAdded = deklBO.Dane.DeklaracjeZgloszeniowe
-                        .Any(z => z.UmowaPracownicza != null && z.UmowaPracownicza.Id == baseUmowa.Id);
-
-                    if (!alreadyAdded)
-                    {
-                        var zgloszenie = new DeklaracjaZgloszeniowa();
-                        deklBO.Dane.DeklaracjeZgloszeniowe.Add(zgloszenie);
-
-                        var podmioty = uchwyt.Podmioty();
-                        var umowy = uchwyt.UmowyPracowniczeGr();
-                        var freshEmployeePodmiot = podmioty.Dane.WszystkieOsoby().FirstOrDefault(p => p.Id == employeePodmiot.Id);
-                        var freshContract = umowy.Dane.Wszystkie().FirstOrDefault(u => u.Id == baseUmowa.Id);
-                        var freshEmployee = freshEmployeePodmiot?.Osoba?.Pracownik;
-
-                        if (freshContract != null && freshEmployee != null)
-                        {
-                            if (freshEmployee.Osoba == null && freshEmployeePodmiot?.Osoba != null)
-                            {
-                                freshEmployee.Osoba = freshEmployeePodmiot.Osoba;
-                            }
-
-                            zgloszenie.UmowaPracownicza = freshContract;
-                            zgloszenie.Pracownik = freshEmployee;
-                            zgloszenie.Typ = (byte)TypDeklaracjiZgloszeniowej.ZUA;
-                            zgloszenie.ImieNazwisko = $"{freshEmployee.Osoba.Imie} {freshEmployee.Osoba.Nazwisko}".ToUpper().Trim();
-
-                            Type? daneZuaType = null;
-                            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-                            {
-                                daneZuaType = asm.GetType("InsERT.Moria.DeklaracjeZUS.DaneZUA");
-                                if (daneZuaType != null) break;
-                            }
-
-                            if (daneZuaType == null)
-                            {
-                                try
-                                {
-                                    var privateAsm = System.Reflection.Assembly.LoadFrom(@"C:\Users\zasc2\AppData\Local\InsERT\Deployments\Nexo\KLINEX SP_Z_O_Oa4bfb87390e94eea9\Binaries\InsERT.Moria.API.Private.dll");
-                                    daneZuaType = privateAsm.GetType("InsERT.Moria.DeklaracjeZUS.DaneZUA");
-                                }
-                                catch (Exception ex)
-                                {
-                                    LogNexo.Informacja($"[Import 2.0] Bd adowania API.Private.dll dla ZUS: {ex.Message}");
-                                }
-                            }
-
-                            if (daneZuaType != null)
-                            {
-                                var daneZUA = Activator.CreateInstance(daneZuaType);
-                                daneZuaType.GetProperty("TYPZgloszenia")?.SetValue(daneZUA, 0);
-                                DateTime obligationDate = freshContract.OkresObowiazywania?.DataPoczatkowa ?? DateTime.Today;
-                                daneZuaType.GetProperty("DataObowiazkuUbezpieczenSpoleczych")?.SetValue(daneZUA, obligationDate);
-                                daneZuaType.GetProperty("DataObowiazkuUbezpieczenZdrowotnych")?.SetValue(daneZUA, obligationDate);
-
-                                daneZuaType.GetProperty("PlacSkladkaEmerytalna")?.SetValue(daneZUA, freshContract.NaliczaSkladkiEmerytalne);
-                                daneZuaType.GetProperty("PlacSkladkaRentowa")?.SetValue(daneZUA, freshContract.NaliczaSkladkiRentowe);
-                                daneZuaType.GetProperty("PlacSkladkaChorobowa")?.SetValue(daneZUA, freshContract.NaliczaSkladkiChorobowe);
-                                daneZuaType.GetProperty("PlacSkladkaWypadkowa")?.SetValue(daneZUA, freshContract.NaliczaSkladkiWypadkowe);
-
-                                var wypelnijMethod = deklBO.GetType().GetMethod("WypelnijDeklaracjeZgloszeniona",
-                                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-
-                                if (wypelnijMethod != null)
-                                {
-                                    wypelnijMethod.Invoke(deklBO, new object[] { zgloszenie, daneZUA });
-                                }
-                                else
-                                {
-                                    item.Ostrzezenia += "Nie odnaleziono metody WypelnijDeklaracjeZgloszeniona. ";
-                                }
-                            }
-
-                            if (!deklBO.Zapisz())
-                            {
-                                var bledy = uchwyt.PodajBledy(deklBO);
-                                var msg = string.Join("; ", bledy.Select(x => $"[{x.Waznosc}] {x.Tresc}"));
-                                item.Ostrzezenia += $"Nie udao si zapisa zgoszenia ZUS: {msg}. ";
-                                LogNexo.Informacja($"[Import 2.0] Nie udao si zapisa zgoszenia ZUS: {msg}");
-                            }
-                            else
-                            {
-                                LogNexo.Informacja($"[Import 2.0] Dodano umow pracownika {item.Imie} {item.Nazwisko} do zgoszenia ZUS (ZUA).");
-                            }
-                        }
-                    }
-                }
+                var req = new ZusRegistrationRequest(
+                    Contract: baseUmowa,
+                    Employee: employeePodmiot.Osoba?.Pracownik ?? new Pracownik(),
+                    IsZzaOnly: false,
+                    StartDate: baseUmowa.OkresObowiazywania?.DataPoczatkowa ?? DateTime.Today,
+                    PlacEmerytalna: baseUmowa.NaliczaSkladkiEmerytalne,
+                    PlacRentowa: baseUmowa.NaliczaSkladkiRentowe,
+                    PlacChorobowa: baseUmowa.NaliczaSkladkiChorobowe,
+                    PlacWypadkowa: baseUmowa.NaliczaSkladkiWypadkowe
+                );
+                ZusDeclarationBatchService.ProcessAndSaveBatch(uchwyt, new[] { req });
             }
             catch (Exception ex)
             {
-                item.Ostrzezenia += $"Bd podczas tworzenia zgoszenia ZUS ZUA: {ex.Message}. ";
                 LogNexo.Blad(ex);
             }
         }
@@ -1233,129 +1215,7 @@ namespace HrAppka_Import_Pracowników
         internal static OrganPodatkowy? ResolveOrganPodatkowy(IUchwyt uchwyt, string usName)
         {
             if (string.IsNullOrWhiteSpace(usName)) return null;
-
-            string normTargetName = NormalizeUsFullName(usName);
-            var targetTokens = GetUsTokenSet(usName);
-            if (string.IsNullOrEmpty(normTargetName) && targetTokens.Count == 0) return null;
-
-            var allOrgany = uchwyt.Podmioty().Dane.WszystkieOrganyPodatkowe().AsEnumerable();
-
-            // 1. Direct Normalized Exact Match on Local Database
-            var exactLocal = allOrgany.FirstOrDefault(o => o.Firma != null && 
-                (NormalizeUsFullName(o.Firma.Nazwa) == normTargetName || NormalizeUsFullName(o.NazwaSkrocona) == normTargetName));
-
-            if (exactLocal != null)
-            {
-                LogNexo.Informacja($"[Import 2.0] Direct exact match found for US '{usName}': {exactLocal.Firma.Nazwa}");
-                return exactLocal.Firma.OrganPodatkowy;
-            }
-
-            // 2. Token Set Matching on Local Database
-            if (targetTokens.Count > 0)
-            {
-                OrganPodatkowy? bestLocal = null;
-                int bestScore = 0;
-
-                foreach (var o in allOrgany)
-                {
-                    if (o.Firma == null) continue;
-                    var candTokens = GetUsTokenSet(o.Firma.Nazwa);
-                    candTokens.UnionWith(GetUsTokenSet(o.NazwaSkrocona));
-
-                    int matchCount = targetTokens.Count(t => candTokens.Contains(t));
-                    // All target tokens must be present in candidate (or maximum match count)
-                    if (matchCount > bestScore && matchCount == targetTokens.Count)
-                    {
-                        bestScore = matchCount;
-                        bestLocal = o.Firma.OrganPodatkowy;
-                    }
-                }
-
-                if (bestLocal != null)
-                {
-                    LogNexo.Informacja($"[Import 2.0] Token set match ({bestScore}/{targetTokens.Count} tokens) found for US '{usName}': {bestLocal.Firma?.Nazwa}");
-                    return bestLocal;
-                }
-            }
-
-            // 3. Search Nexo Master Template Dictionary (UrzedySkarbowe)
-            try
-            {
-                var podmiotyMgr = uchwyt.Podmioty();
-                
-                string? kod = null;
-                string? templateNazwa = null;
-                
-                using (var bo = podmiotyMgr.UtworzPracownika())
-                {
-                    var getUow = (InsERT.Mox.BusinessObjects.IGetUnitOfWork)bo;
-                    var scope = (InsERT.Mox.Runtime.IInjectionScope)getUow.UnitOfWork;
-                    var context = (ModelDanychContainer)scope.ScopedContainer.GetObject(typeof(ModelDanychContainer));
-                    
-                    var allTemplates = context.UrzedySkarbowe.AsEnumerable();
-
-                    // Direct Exact Match on Templates
-                    var exactTemplate = allTemplates.FirstOrDefault(t => t.Nazwa != null && NormalizeUsFullName(t.Nazwa) == normTargetName);
-                    if (exactTemplate != null)
-                    {
-                        kod = exactTemplate.Kod;
-                        templateNazwa = exactTemplate.Nazwa;
-                    }
-                    else if (targetTokens.Count > 0)
-                    {
-                        // Token Set Match on Templates
-                        InsERT.Moria.ModelDanych.UrzadSkarbowy? bestTemplate = null;
-                        int bestScore = 0;
-
-                        foreach (var t in allTemplates)
-                        {
-                            if (string.IsNullOrWhiteSpace(t.Nazwa)) continue;
-                            var candTokens = GetUsTokenSet(t.Nazwa);
-                            int matchCount = targetTokens.Count(tok => candTokens.Contains(tok));
-                            if (matchCount > bestScore && matchCount == targetTokens.Count)
-                            {
-                                bestScore = matchCount;
-                                bestTemplate = t;
-                            }
-                        }
-
-                        if (bestTemplate != null)
-                        {
-                            kod = bestTemplate.Kod;
-                            templateNazwa = bestTemplate.Nazwa;
-                        }
-                    }
-                }
-
-                if (kod != null)
-                {
-                    using (var organBO = podmiotyMgr.UtworzOrganPodatkowy())
-                    {
-                        var organ = (IOrganPodatkowy)organBO;
-                        if (organ.WypelnijDlaKodu(kod))
-                        {
-                            organBO.AutoSymbol();
-                            if (organBO.Zapisz())
-                            {
-                                LogNexo.Informacja($"[Import 2.0] Utworzono brakujący urząd skarbowy z szablonu Nexo: {templateNazwa} (Kod: {kod})");
-                                return organBO.Dane.Firma.OrganPodatkowy;
-                            }
-                            else
-                            {
-                                var bledy = uchwyt.PodajBledy(organBO);
-                                var msg = string.Join("; ", bledy.Select(x => x.Tresc));
-                                LogNexo.Informacja($"[Import 2.0] Błąd zapisu urzędu skarbowego {templateNazwa}: {msg}");
-                            }
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                LogNexo.Blad(ex);
-            }
-
-            return null;
+            return SferaDictionaryCache.Instance.ResolveTaxOffice(uchwyt, usName);
         }
 
         private static string ZapytajOUzytkownikaODrugieImie(string nazwisko, string imie, string opcja1, string opcja2)

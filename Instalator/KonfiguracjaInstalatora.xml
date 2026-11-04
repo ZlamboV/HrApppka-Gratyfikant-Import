@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Konfiguracja>
-  <Tytul>Instalator integracji HrAppka</Tytul>
-  <TekstPowitalny>Wytawy w instalatorze wtyczki importującej dane z HrAppka do Gratyfikant Nexo Pro.</TekstPowitalny>
+  <Tytul>Instalator wtyczki Import Pracowników</Tytul>
+  <TekstPowitalny>Witamy w instalatorze wtyczki importującej dane pracowników do Gratyfikant Nexo Pro.</TekstPowitalny>
   <DostawcaInfo>Copyright © 2026 Antigravity Dev Team</DostawcaInfo>
   <UtworzSkrotNaPulpicie>false</UtworzSkrotNaPulpicie>
   <UtworzSkrotWMenuStart>false</UtworzSkrotWMenuStart>

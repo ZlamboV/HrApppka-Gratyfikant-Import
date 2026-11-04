@@ -11,9 +11,9 @@ namespace HrAppka_Import_Pracowników
 
         public Guid Identyfikator => new Guid("8e2be35b-12d8-4f81-9b16-562a93bbef88");
 
-        public string Nazwa => "Import z HrAppka";
+        public string Nazwa => "Import Pracowników";
 
-        public string Opis => "Operacje integracji HrAppka z Gratyfikant Nexo Pro";
+        public string Opis => "Operacje importu pracowników do Gratyfikant Nexo Pro";
 
         public IEnumerable<Operacja> Operacje { get; } = new Operacja[]
         {

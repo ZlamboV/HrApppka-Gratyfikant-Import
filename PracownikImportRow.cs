@@ -23,13 +23,105 @@ namespace HrAppka_Import_Pracowników
         [BezKolumny]
         public string? ResolvedGender { get; set; }
 
-        [Browsable(false)]
-        [BezKolumny]
-        public InsERT.Moria.ModelDanych.OrganPodatkowy? SelectedOrganPodatkowy { get; set; }
+        private bool isSelected = true;
+        private object? selectedSzablonUmowy;
+        private InsERT.Moria.ModelDanych.OrganPodatkowy? selectedOrganPodatkowy;
+        private DecyzjaIstniejacyPracownik decyzjaDlaIstniejacego = DecyzjaIstniejacyPracownik.AktualizujKartotekeIDodajUmowe;
+
+        [DisplayName("Wybór")]
+        public bool IsSelected
+        {
+            get => isSelected;
+            set => SetProperty(ref isSelected, value);
+        }
 
         [Browsable(false)]
         [BezKolumny]
-        public DecyzjaIstniejacyPracownik DecyzjaDlaIstniejacego { get; set; } = DecyzjaIstniejacyPracownik.AktualizujKartotekeIDodajUmowe;
+        public object? SelectedSzablonUmowy
+        {
+            get => selectedSzablonUmowy;
+            set => SetProperty(ref selectedSzablonUmowy, value);
+        }
+
+        [Browsable(false)]
+        [BezKolumny]
+        public InsERT.Moria.ModelDanych.OrganPodatkowy? SelectedOrganPodatkowy
+        {
+            get => selectedOrganPodatkowy;
+            set
+            {
+                if (SetProperty(ref selectedOrganPodatkowy, value))
+                {
+                    OnPropertyChanged(nameof(StatusLevel));
+                }
+            }
+        }
+
+        [Browsable(false)]
+        [BezKolumny]
+        public DecyzjaIstniejacyPracownik DecyzjaDlaIstniejacego
+        {
+            get => decyzjaDlaIstniejacego;
+            set
+            {
+                if (SetProperty(ref decyzjaDlaIstniejacego, value))
+                {
+                    if (value == DecyzjaIstniejacyPracownik.PominWiersz && IsDuplicate)
+                    {
+                        Status = "Pominięty (Duplikat)";
+                    }
+                    else if (IsDuplicate && Status == "Pominięty (Duplikat)")
+                    {
+                        Status = "Istnieje w bazie";
+                    }
+                    OnPropertyChanged(nameof(StatusLevel));
+                    OnPropertyChanged(nameof(IsDuplicate));
+                }
+            }
+        }
+
+        [Browsable(false)]
+        [BezKolumny]
+        public bool IsDuplicate => (Status != null && Status.Contains("Istnieje", StringComparison.OrdinalIgnoreCase)) ||
+                                   (Status != null && Status.Contains("Duplikat", StringComparison.OrdinalIgnoreCase)) ||
+                                   (Ostrzezenia != null && Ostrzezenia.Contains("już istnieje", StringComparison.OrdinalIgnoreCase));
+
+        [Browsable(false)]
+        [BezKolumny]
+        public RowStatusLevel StatusLevel
+        {
+            get
+            {
+                // 1. Critical Errors
+                if (string.IsNullOrWhiteSpace(Imie) || string.IsNullOrWhiteSpace(Nazwisko))
+                    return RowStatusLevel.CriticalError;
+
+                if (string.IsNullOrWhiteSpace(Pesel) && string.IsNullOrWhiteSpace(Paszport) && string.IsNullOrWhiteSpace(Dowod))
+                    return RowStatusLevel.CriticalError;
+
+                if (!string.IsNullOrWhiteSpace(Pesel) && !PeselHelper.ValidatePesel(Pesel, out _, out _))
+                    return RowStatusLevel.CriticalError;
+
+                if (Status != null && (
+                    Status.StartsWith("Błąd", StringComparison.OrdinalIgnoreCase) ||
+                    Status.StartsWith("Błędny", StringComparison.OrdinalIgnoreCase) ||
+                    Status.Contains("Brak PESEL", StringComparison.OrdinalIgnoreCase)))
+                {
+                    return RowStatusLevel.CriticalError;
+                }
+
+                // 2. Warnings / Conflicts
+                if (IsDuplicate || 
+                    !string.IsNullOrWhiteSpace(Ostrzezenia) ||
+                    (SelectedOrganPodatkowy == null && !string.IsNullOrWhiteSpace(UrzadSkarbowy)))
+                {
+                    return RowStatusLevel.Warning;
+                }
+
+                // 3. Ready
+                return RowStatusLevel.Ready;
+            }
+        }
         private string imie = "";
         private string drugieImie = "";
         private string nazwisko = "";
@@ -88,6 +180,8 @@ namespace HrAppka_Import_Pracowników
                 if (SetProperty(ref imie, value))
                 {
                     OnPropertyChanged(nameof(PracownikNazwa));
+                    OnPropertyChanged(nameof(StatusLevel));
+                    OnPropertyChanged(nameof(IsDuplicate));
                 }
             }
         }
@@ -110,6 +204,8 @@ namespace HrAppka_Import_Pracowników
                 if (SetProperty(ref nazwisko, value))
                 {
                     OnPropertyChanged(nameof(PracownikNazwa));
+                    OnPropertyChanged(nameof(StatusLevel));
+                    OnPropertyChanged(nameof(IsDuplicate));
                 }
             }
         }
@@ -143,7 +239,18 @@ namespace HrAppka_Import_Pracowników
         public string Paszport
         {
             get => paszport;
-            set => SetProperty(ref paszport, value);
+            set
+            {
+                if (SetProperty(ref paszport, value))
+                {
+                    if (!string.IsNullOrWhiteSpace(paszport) && (status == "Brak PESEL i Paszportu" || string.IsNullOrWhiteSpace(status)))
+                    {
+                        Status = "Gotowy (Cudzoziemiec)";
+                    }
+                    OnPropertyChanged(nameof(StatusLevel));
+                    OnPropertyChanged(nameof(IsDuplicate));
+                }
+            }
         }
 
         [Browsable(false)]
@@ -167,7 +274,18 @@ namespace HrAppka_Import_Pracowników
         public string Dowod
         {
             get => dowod;
-            set => SetProperty(ref dowod, value);
+            set
+            {
+                if (SetProperty(ref dowod, value))
+                {
+                    if (!string.IsNullOrWhiteSpace(dowod) && (status == "Brak PESEL i Paszportu" || string.IsNullOrWhiteSpace(status)))
+                    {
+                        Status = "Gotowy";
+                    }
+                    OnPropertyChanged(nameof(StatusLevel));
+                    OnPropertyChanged(nameof(IsDuplicate));
+                }
+            }
         }
 
         [Browsable(false)]
@@ -234,9 +352,6 @@ namespace HrAppka_Import_Pracowników
             set => SetProperty(ref nrLokalu, value);
         }
 
-        [Browsable(false)]
-        [BezKolumny]
-        public object? SelectedSzablonUmowy { get; set; }
 
         [Browsable(false)]
         [BezKolumny]
@@ -392,7 +507,23 @@ namespace HrAppka_Import_Pracowników
         public string Pesel
         {
             get => pesel;
-            set => SetProperty(ref pesel, value);
+            set
+            {
+                if (SetProperty(ref pesel, value))
+                {
+                    if (!string.IsNullOrWhiteSpace(pesel) && PeselHelper.ValidatePesel(pesel, out var bd, out var g))
+                    {
+                        ResolvedBirthDate = bd;
+                        ResolvedGender = g;
+                        if (status == "Błędny PESEL" || status == "Brak PESEL i Paszportu")
+                        {
+                            Status = "Gotowy";
+                        }
+                    }
+                    OnPropertyChanged(nameof(StatusLevel));
+                    OnPropertyChanged(nameof(IsDuplicate));
+                }
+            }
         }
 
         [DisplayName("Umowa")]
@@ -409,14 +540,28 @@ namespace HrAppka_Import_Pracowników
         public string Status
         {
             get => status;
-            set => SetProperty(ref status, value);
+            set
+            {
+                if (SetProperty(ref status, value))
+                {
+                    OnPropertyChanged(nameof(StatusLevel));
+                    OnPropertyChanged(nameof(IsDuplicate));
+                }
+            }
         }
 
         [DisplayName("Ostrzeżenia")]
         public string Ostrzezenia
         {
             get => ostrzezenia;
-            set => SetProperty(ref ostrzezenia, value);
+            set
+            {
+                if (SetProperty(ref ostrzezenia, value))
+                {
+                    OnPropertyChanged(nameof(StatusLevel));
+                    OnPropertyChanged(nameof(IsDuplicate));
+                }
+            }
         }
 
         // WPF Data-Binding (INotifyPropertyChanged)

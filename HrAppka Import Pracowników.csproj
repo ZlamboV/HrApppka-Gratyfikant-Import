@@ -12,6 +12,13 @@
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
     <RootNamespace>HrAppka_Import_Pracowników</RootNamespace>
     <AssemblyName>HrAppka_Import_Pracowników</AssemblyName>
+    <Title>Import Pracowników</Title>
+    <Product>Import Pracowników</Product>
+    <Description>Wtyczka importu pracowników dla Gratyfikant Nexo Pro</Description>
+    <Company>Antigravity Dev Team</Company>
+    <Version>1.0.8.14</Version>
+    <AssemblyVersion>1.0.8.14</AssemblyVersion>
+    <FileVersion>1.0.8.14</FileVersion>
 
     <nexoSdkBinPath>C:\Users\zasc2\AppData\Local\InsERT\Deployments\Nexo\KLINEX SP_Z_O_Oa4bfb87390e94eea9\Binaries\</nexoSdkBinPath>
     <nexoSdkNarzedziaPath>C:\ NEXO SDK SFERA\nexoSDK_61.0.4.9400\Narzedzia\</nexoSdkNarzedziaPath>
@@ -52,6 +59,14 @@
     </Reference>
     <Reference Include="InsERT.Mox.EntityFrameworkSupport">
       <HintPath>$(nexoSdkBinPath)InsERT.Mox.EntityFrameworkSupport.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="InsERT.Moria.DeklaracjeZUS">
+      <HintPath>$(nexoSdkBinPath)InsERT.Moria.DeklaracjeZUS.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="InsERT.Moria.API.Private">
+      <HintPath>$(nexoSdkBinPath)InsERT.Moria.API.Private.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>
