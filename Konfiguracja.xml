@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Konfiguracja StworzPakiet="Tak" StworzInstalator="Tak" NazwaFolderuPakietu="Pakiet" NazwaFolderuInstalatora="Instalator" LokalizacjaSdkBin="C:\ NEXO SDK SFERA\nexoSDK_60.1.1.9292\Bin\" LokalizacjaSdkNarzedzia="C:\ NEXO SDK SFERA\nexoSDK_60.1.1.9292\Narzedzia\">
+<Konfiguracja StworzPakiet="Tak" StworzInstalator="Tak" NazwaFolderuPakietu="Pakiet" NazwaFolderuInstalatora="Instalator" LokalizacjaSdkBin="C:\ NEXO SDK SFERA\nexoSDK_62.0.0.9537\Bin\" LokalizacjaSdkNarzedzia="C:\ NEXO SDK SFERA\nexoSDK_62.0.0.9537\Narzedzia\">
   <ParametryInstalacji StworzPlikiBat="Tak" AutomatycznaInstalacja="Nie">
     <PlikParametrowInstalacji>ParametryInstalacji.txt</PlikParametrowInstalacji>
   </ParametryInstalacji>

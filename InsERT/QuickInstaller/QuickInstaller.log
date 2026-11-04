@@ -1,0 +1,37 @@
+QuickInstallerWizard Information: 0 : 2026-11-04 18:54:24	Błąd kompilacji projektu. 
+Welcome to .NET 10.0!
+---------------------
+SDK Version: 10.0.303
+
+Telemetry
+---------
+The .NET tools collect usage data in order to help us improve your experience. It is collected by Microsoft and shared with the community. You can opt-out of telemetry by setting the DOTNET_CLI_TELEMETRY_OPTOUT environment variable to '1' or 'true' using your favorite shell.
+
+Read more about .NET CLI Tools telemetry: https://aka.ms/dotnet-cli-telemetry
+
+----------------
+Installed an ASP.NET Core HTTPS development certificate.
+To trust the certificate, run 'dotnet dev-certs https --trust'
+Learn about HTTPS: https://aka.ms/dotnet-https
+
+----------------
+Write your first app: https://aka.ms/dotnet-hello-world
+Find out what's new: https://aka.ms/dotnet-whats-new
+Explore documentation: https://aka.ms/dotnet-docs
+Report issues and find source on GitHub: https://github.com/dotnet/core
+Use 'dotnet --help' to see available commands or visit: https://aka.ms/dotnet-cli
+--------------------------------------------------------------------------------------
+An issue was encountered verifying workloads. For more information, run "dotnet workload update".
+
+QuickInstallerWizard Information: 0 : 2026-11-04 18:54:24	Szczegóły: Failed to add 'c:\ NEXO SDK SFERA\.dotnet_home\.dotnet\tools' to the PATH environment variable. Add this directory to your PATH to use tools installed with 'dotnet tool install'.
+C:\ NEXO SDK SFERA\HrAppka Import Pracownik├│w\InsERT\QuickInstaller\Wizard\QuickInstallerWizard_a975c2c1-ebb5-4065-a32f-2eed46815241\Project\QuickInstallerCore.csproj : error NU1100: Unable to resolve 'Microsoft.NET.ILLink.Tasks (>= 8.0.30)' for 'net8.0-windows10.0.17763.0'.
+C:\ NEXO SDK SFERA\HrAppka Import Pracownik├│w\InsERT\QuickInstaller\Wizard\QuickInstallerWizard_a975c2c1-ebb5-4065-a32f-2eed46815241\Project\QuickInstallerCore.csproj : error NU1100: Unable to resolve 'Microsoft.NET.ILLink.Tasks (>= 8.0.30)' for 'net8.0-windows10.0.17763.0/win-x64'.
+C:\ NEXO SDK SFERA\HrAppka Import Pracownik├│w\InsERT\QuickInstaller\Wizard\QuickInstallerWizard_a975c2c1-ebb5-4065-a32f-2eed46815241\Project\QuickInstallerCore.csproj : error NU1100: Unable to resolve 'Microsoft.NETCore.App.Ref (= 8.0.30)' for 'net8.0-windows10.0.17763'.
+C:\ NEXO SDK SFERA\HrAppka Import Pracownik├│w\InsERT\QuickInstaller\Wizard\QuickInstallerWizard_a975c2c1-ebb5-4065-a32f-2eed46815241\Project\QuickInstallerCore.csproj : error NU1100: Unable to resolve 'Microsoft.NETCore.App.Runtime.win-x64 (= 8.0.30)' for 'net8.0-windows10.0.17763'.
+C:\ NEXO SDK SFERA\HrAppka Import Pracownik├│w\InsERT\QuickInstaller\Wizard\QuickInstallerWizard_a975c2c1-ebb5-4065-a32f-2eed46815241\Project\QuickInstallerCore.csproj : error NU1100: Unable to resolve 'Microsoft.WindowsDesktop.App.Ref (= 8.0.30)' for 'net8.0-windows10.0.17763'.
+C:\ NEXO SDK SFERA\HrAppka Import Pracownik├│w\InsERT\QuickInstaller\Wizard\QuickInstallerWizard_a975c2c1-ebb5-4065-a32f-2eed46815241\Project\QuickInstallerCore.csproj : error NU1100: Unable to resolve 'Microsoft.WindowsDesktop.App.Runtime.win-x64 (= 8.0.30)' for 'net8.0-windows10.0.17763'.
+C:\ NEXO SDK SFERA\HrAppka Import Pracownik├│w\InsERT\QuickInstaller\Wizard\QuickInstallerWizard_a975c2c1-ebb5-4065-a32f-2eed46815241\Project\QuickInstallerCore.csproj : error NU1100: Unable to resolve 'Microsoft.AspNetCore.App.Ref (= 8.0.30)' for 'net8.0-windows10.0.17763'.
+C:\ NEXO SDK SFERA\HrAppka Import Pracownik├│w\InsERT\QuickInstaller\Wizard\QuickInstallerWizard_a975c2c1-ebb5-4065-a32f-2eed46815241\Project\QuickInstallerCore.csproj : error NU1100: Unable to resolve 'Microsoft.AspNetCore.App.Runtime.win-x64 (= 8.0.30)' for 'net8.0-windows10.0.17763'.
+C:\ NEXO SDK SFERA\HrAppka Import Pracownik├│w\InsERT\QuickInstaller\Wizard\QuickInstallerWizard_a975c2c1-ebb5-4065-a32f-2eed46815241\Project\QuickInstallerCore.csproj : error NU1100: Unable to resolve 'Microsoft.NETCore.App.Host.win-x64 (= 8.0.30)' for 'net8.0-windows10.0.17763'.
+C:\ NEXO SDK SFERA\HrAppka Import Pracownik├│w\InsERT\QuickInstaller\Wizard\QuickInstallerWizard_a975c2c1-ebb5-4065-a32f-2eed46815241\Project\QuickInstallerCore.csproj : error NU1100: Unable to resolve 'Microsoft.Windows.SDK.NET.Ref (= 10.0.17763.57)' for 'net8.0-windows10.0.17763'.
+

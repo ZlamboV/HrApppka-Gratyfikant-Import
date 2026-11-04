@@ -20,10 +20,24 @@ class Program
         AssemblyLoadContext.Default.Resolving += (context, name) =>
         {
             string assemblyName = name.Name;
-            string path = Path.Combine(@"C:\Users\zasc2\AppData\Local\InsERT\Deployments\Nexo\KLINEX SP_Z_O_Oa4bfb87390e94eea9\Binaries", assemblyName + ".dll");
-            if (File.Exists(path))
+            string[] searchDirs = new[]
             {
-                return context.LoadFromAssemblyPath(path);
+                @"c:\ NEXO SDK SFERA\nexoSDK_62.0.0.9537\Bin\",
+                @"c:\ NEXO SDK SFERA\nexoSDK_61.0.4.9400\Bin\",
+                @"C:\Users\zasc2\AppData\Local\InsERT\Deployments\Nexo\KLINEX SP_Z_O_Oa4bfb87390e94eea9\Binaries\",
+                AppDomain.CurrentDomain.BaseDirectory
+            };
+
+            foreach (var dir in searchDirs)
+            {
+                if (Directory.Exists(dir))
+                {
+                    string candidate = Path.Combine(dir, assemblyName + ".dll");
+                    if (File.Exists(candidate))
+                    {
+                        try { return context.LoadFromAssemblyPath(candidate); } catch { }
+                    }
+                }
             }
             return null;
         };
@@ -82,7 +96,8 @@ class Program
         Console.WriteLine("=== DIAGNOSTIC RUN OF IMPORT LOGIC ===");
         try
         {
-            SferaRunner.Execute();
+            string? targetFile = args.FirstOrDefault(a => !a.StartsWith("-"));
+            SferaRunner.Execute(targetFile);
         }
         catch (ArgumentException argException)
         {
@@ -426,7 +441,7 @@ class SferaRunner
 
                 try
                 {
-                    var result = OperacjaImportuPracownikow20.ZaimportujRow20(null!, row);
+                    var result = OperacjaImportuPracownikow20.ZaimportujRow20(null, row, fallbackUchwyt: uchwyt);
                     Console.WriteLine($"  * Result Status: {row.Status}");
                     if (!string.IsNullOrWhiteSpace(row.Ostrzezenia))
                     {
