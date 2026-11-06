@@ -928,7 +928,7 @@ namespace HrAppka_Import_Pracowników
                         if (item.DecyzjaDlaIstniejacego == DecyzjaIstniejacyPracownik.NadpiszUmowe && savedEmployeePodmiot.Osoba?.Pracownik != null)
                         {
                             var existingContracts = uchwyt.UmowyPracowniczeGr().Dane.Wszystkie()
-                                .Where(x => x.Pracownik != null && x.Pracownik.Id == savedEmployeePodmiot.Osoba.Pracownik.Id && !x.IsInRecycleBin)
+                                .Where(x => x.Pracownik != null && x.Pracownik.Id == savedEmployeePodmiot.Osoba.Pracownik.Id).AsEnumerable().Where(x => !x.IsInRecycleBin)
                                 .ToList();
                             foreach (var ec in existingContracts)
                             {

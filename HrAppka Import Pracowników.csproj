@@ -16,9 +16,9 @@
     <Product>Import Pracowników</Product>
     <Description>Wtyczka importu pracowników dla Gratyfikant Nexo Pro</Description>
     <Company>Antigravity Dev Team</Company>
-    <Version>1.0.8.14</Version>
-    <AssemblyVersion>1.0.8.14</AssemblyVersion>
-    <FileVersion>1.0.8.14</FileVersion>
+    <Version>1.0.8.16</Version>
+    <AssemblyVersion>1.0.8.16</AssemblyVersion>
+    <FileVersion>1.0.8.16</FileVersion>
 
     <nexoSdkBinPath>C:\Users\zasc2\AppData\Local\InsERT\Deployments\Nexo\KLINEX SP_Z_O_Oa4bfb87390e94eea9\Binaries\</nexoSdkBinPath>
     <nexoSdkNarzedziaPath>C:\ NEXO SDK SFERA\nexoSDK_61.0.4.9400\Narzedzia\</nexoSdkNarzedziaPath>
@@ -74,6 +74,13 @@
   <ItemGroup>
     <PackageReference Include="MiniExcel" Version="1.34.0" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Remove="Instalator\**" />
+    <Page Remove="Instalator\**" />
+    <Resource Remove="Instalator\**" />
+    <EmbeddedResource Remove="Instalator\**" />
+    <None Remove="Instalator\**" />
+  </ItemGroup>
 
   <ItemGroup>
     <None Update="HrAppka_Import_Pracowników.plugin">
@@ -95,6 +102,6 @@
   </ItemGroup>
 
   <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <Exec Command="if exist &quot;$(nexoSdkNarzedziaPath)PackageAndInstallerBuilder.exe&quot; (call &quot;$(nexoSdkNarzedziaPath)PackageAndInstallerBuilder.exe&quot; /PlikKonfiguracji:Konfiguracja.xml /KatalogDocelowy:&quot;$(TargetDir)\&quot;) else (echo Nie można zbudować pakietu i instalatora, ponieważ nie istnieje plik: &quot;$(nexoSdkNarzedziaPath)PackageAndInstallerBuilder.exe&quot;)" />
+    <Exec Command="if exist &quot;$(nexoSdkNarzedziaPath)PackageAndInstallerBuilder.exe&quot; (call &quot;$(nexoSdkNarzedziaPath)PackageAndInstallerBuilder.exe&quot; /PlikKonfiguracji:Konfiguracja.xml /KatalogDocelowy:&quot;$(TargetDir)\&quot;) else (echo Nie mo�na zbudowa� pakietu i instalatora, poniewa� nie istnieje plik: &quot;$(nexoSdkNarzedziaPath)PackageAndInstallerBuilder.exe&quot;)" />
   </Target>
 </Project>
