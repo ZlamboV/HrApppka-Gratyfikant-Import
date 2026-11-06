@@ -146,6 +146,7 @@ namespace HrAppka_Import_Pracowników.Services
                 try
                 {
                     var departments = uchwyt.JednostkiOrganizacyjne().Dane.Wszystkie()
+                        .AsEnumerable()
                         .Where(d => !d.IsInRecycleBin)
                         .ToList();
 
@@ -396,7 +397,9 @@ namespace HrAppka_Import_Pracowników.Services
                 {
                     // Check if exists in DB
                     RootFabrykaDepartment = deptMgr.Dane.Wszystkie()
-                        .FirstOrDefault(d => d.Nazwa.ToUpper() == "FABRYKA" && d.JednostkaNadrzedna == null && !d.IsInRecycleBin);
+                        .Where(d => d.Nazwa.ToUpper() == "FABRYKA" && d.JednostkaNadrzedna == null)
+                        .AsEnumerable()
+                        .FirstOrDefault(d => !d.IsInRecycleBin);
 
                     if (RootFabrykaDepartment == null)
                     {
@@ -405,7 +408,8 @@ namespace HrAppka_Import_Pracowników.Services
                             parentBO.Dane.Nazwa = "FABRYKA";
                             if (parentBO.Zapisz())
                             {
-                                RootFabrykaDepartment = parentBO.Dane;
+                                int savedParentId = parentBO.Dane.Id;
+                                RootFabrykaDepartment = deptMgr.Dane.Wszystkie().FirstOrDefault(d => d.Id == savedParentId) ?? parentBO.Dane;
                                 DepartmentsByName["FABRYKA"] = RootFabrykaDepartment;
                             }
                             else
@@ -428,7 +432,8 @@ namespace HrAppka_Import_Pracowników.Services
                     subBO.Dane.JednostkaNadrzedna = RootFabrykaDepartment;
                     if (subBO.Zapisz())
                     {
-                        var created = subBO.Dane;
+                        int savedSubId = subBO.Dane.Id;
+                        var created = deptMgr.Dane.Wszystkie().FirstOrDefault(d => d.Id == savedSubId) ?? subBO.Dane;
                         DepartmentsByName[key] = created;
                         return created;
                     }
