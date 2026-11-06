@@ -162,6 +162,7 @@
                       ScrollViewer.CanContentScroll="True"
                       ScrollViewer.VerticalScrollBarVisibility="Auto"
                       ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                      CanUserResizeColumns="True"
                       SelectionMode="Extended"
                       SelectionUnit="FullRow"
                       GridLinesVisibility="Horizontal"
@@ -203,6 +204,9 @@
                 <DataGrid.Columns>
                     <!-- CheckBox Wybór -->
                     <DataGridCheckBoxColumn Header="Wybór" Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="50" />
+
+                    <!-- Status (Second Column - Wymóg użytkownika) -->
+                    <DataGridTextColumn Header="Status" Binding="{Binding Status}" IsReadOnly="True" Width="140" FontWeight="SemiBold" />
 
                     <!-- Pracownik (Nazwisko Imię) -->
                     <DataGridTextColumn Header="Pracownik" Binding="{Binding PracownikNazwa, Mode=OneWay}" IsReadOnly="True" Width="160" FontWeight="SemiBold" />
@@ -260,11 +264,59 @@
                     <!-- Data Zakończenia -->
                     <DataGridTextColumn Header="Do dnia" Binding="{Binding DataZakonczenia}" Width="85" />
 
-                    <!-- Status -->
-                    <DataGridTextColumn Header="Status" Binding="{Binding Status}" IsReadOnly="True" Width="130" />
+                    <!-- Data Zawarcia -->
+                    <DataGridTextColumn Header="Data zawarcia" Binding="{Binding DataZawarcia}" Width="90" />
+
+                    <!-- Miejscowość -->
+                    <DataGridTextColumn Header="Miejscowość" Binding="{Binding Miejscowosc}" Width="120" />
+
+                    <!-- Ulica -->
+                    <DataGridTextColumn Header="Ulica" Binding="{Binding Ulica}" Width="120" />
+
+                    <!-- Nr domu -->
+                    <DataGridTextColumn Header="Nr domu" Binding="{Binding NrDomu}" Width="70" />
+
+                    <!-- Nr lokalu -->
+                    <DataGridTextColumn Header="Nr lokalu" Binding="{Binding NrLokalu}" Width="70" />
+
+                    <!-- Kod pocztowy -->
+                    <DataGridTextColumn Header="Kod pocztowy" Binding="{Binding KodPocztowy}" Width="90" />
+
+                    <!-- Gmina -->
+                    <DataGridTextColumn Header="Gmina" Binding="{Binding Gmina}" Width="100" />
+
+                    <!-- Powiat -->
+                    <DataGridTextColumn Header="Powiat" Binding="{Binding Powiat}" Width="100" />
+
+                    <!-- Województwo -->
+                    <DataGridTextColumn Header="Województwo" Binding="{Binding Wojewodztwo}" Width="110" />
+
+                    <!-- Kraj -->
+                    <DataGridTextColumn Header="Kraj" Binding="{Binding Kraj}" Width="90" />
+
+                    <!-- Obywatelstwo -->
+                    <DataGridTextColumn Header="Obywatelstwo" Binding="{Binding Obywatelstwo}" Width="100" />
+
+                    <!-- Telefon -->
+                    <DataGridTextColumn Header="Telefon" Binding="{Binding Telefon}" Width="110" />
+
+                    <!-- Email -->
+                    <DataGridTextColumn Header="Email" Binding="{Binding Email}" Width="150" />
+
+                    <!-- Rachunek bankowy -->
+                    <DataGridTextColumn Header="Rachunek bankowy" Binding="{Binding BankStr}" Width="180" />
+
+                    <!-- NFZ -->
+                    <DataGridTextColumn Header="NFZ" Binding="{Binding NfzStr}" Width="70" />
+
+                    <!-- Kod zawodu -->
+                    <DataGridTextColumn Header="Kod zawodu" Binding="{Binding KodZawodu}" Width="90" />
+
+                    <!-- Student -->
+                    <DataGridTextColumn Header="Student" Binding="{Binding JestStudentem}" Width="75" />
 
                     <!-- Ostrzeżenia -->
-                    <DataGridTextColumn Header="Ostrzeżenia" Binding="{Binding Ostrzezenia}" IsReadOnly="True" Width="*" />
+                    <DataGridTextColumn Header="Ostrzeżenia" Binding="{Binding Ostrzezenia}" IsReadOnly="True" Width="350" MinWidth="200" />
                 </DataGrid.Columns>
             </DataGrid>
         </Border>
@@ -292,8 +344,8 @@
                     <ProgressBar Grid.Row="1" 
                                  Height="10" 
                                  Minimum="0" 
-                                 Maximum="{Binding TotalProgress}" 
-                                 Value="{Binding CurrentProgress}" 
+                                 Maximum="{Binding TotalProgress, Mode=OneWay}" 
+                                 Value="{Binding CurrentProgress, Mode=OneWay}" 
                                  Foreground="#0078D7" 
                                  Background="#EBEBEB" 
                                  BorderThickness="0" />

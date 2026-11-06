@@ -126,11 +126,11 @@ namespace HrAppka_Import_Pracowników.UI.ViewModels
         public int WarningCount { get => _warningCount; private set => SetProperty(ref _warningCount, value); }
         public int ErrorCount { get => _errorCount; private set => SetProperty(ref _errorCount, value); }
 
-        public int CurrentProgress { get => _currentProgress; private set => SetProperty(ref _currentProgress, value); }
-        public int TotalProgress { get => _totalProgress; private set => SetProperty(ref _totalProgress, value); }
-        public double ProgressPercentage { get => _progressPercentage; private set => SetProperty(ref _progressPercentage, value); }
-        public string CurrentEmployeeName { get => _currentEmployeeName; private set => SetProperty(ref _currentEmployeeName, value); }
-        public string CurrentStatusMessage { get => _currentStatusMessage; private set => SetProperty(ref _currentStatusMessage, value); }
+        public int CurrentProgress { get => _currentProgress; set => SetProperty(ref _currentProgress, value); }
+        public int TotalProgress { get => _totalProgress; set => SetProperty(ref _totalProgress, value); }
+        public double ProgressPercentage { get => _progressPercentage; set => SetProperty(ref _progressPercentage, value); }
+        public string CurrentEmployeeName { get => _currentEmployeeName; set => SetProperty(ref _currentEmployeeName, value); }
+        public string CurrentStatusMessage { get => _currentStatusMessage; set => SetProperty(ref _currentStatusMessage, value); }
 
         public bool CanClose => !_isImporting;
 
