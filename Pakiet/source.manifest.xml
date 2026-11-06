@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?><Package Identity="HrAppka_Import_Pracowników-1.0.8.14" DisplayName="Import Pracowników" VersionDisplayName="1.0.8.14" MinimumServerVersion="">
+﻿<?xml version="1.0" encoding="utf-8"?><Package Identity="HrAppka_Import_Pracowników-1.0.8.16" DisplayName="Import Pracowników" VersionDisplayName="1.0.8.16" MinimumServerVersion="">
       <Contents>
         <File Name="HrAppka_Import_Pracowników.dll" />
         <File Name="HrAppka_Import_Pracowników.plugin" />
