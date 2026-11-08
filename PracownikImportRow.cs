@@ -53,6 +53,8 @@ namespace HrAppka_Import_Pracowników
                 if (SetProperty(ref selectedOrganPodatkowy, value))
                 {
                     OnPropertyChanged(nameof(StatusLevel));
+                    OnPropertyChanged(nameof(HasTaxOfficeWarning));
+                    OnPropertyChanged(nameof(TaxOfficeToolTip));
                 }
             }
         }
@@ -122,6 +124,92 @@ namespace HrAppka_Import_Pracowników
                 return RowStatusLevel.Ready;
             }
         }
+
+        // Cell-Level Error & Warning Properties for WPF Grid Cell Highlighting
+        [Browsable(false)]
+        [BezKolumny]
+        public bool HasPeselError => !string.IsNullOrWhiteSpace(Pesel) && !PeselHelper.ValidatePesel(Pesel, out _, out _);
+
+        [Browsable(false)]
+        [BezKolumny]
+        public bool HasPeselWarning => IsDuplicate && (Status?.Contains("PESEL", StringComparison.OrdinalIgnoreCase) == true || Ostrzezenia?.Contains("PESEL", StringComparison.OrdinalIgnoreCase) == true);
+
+        [Browsable(false)]
+        [BezKolumny]
+        public string PeselToolTip => HasPeselError 
+            ? "Nieprawidłowy PESEL lub błędna suma kontrolna." 
+            : (HasPeselWarning ? "Pracownik z tym PESEL już istnieje w bazie." : "");
+
+        [Browsable(false)]
+        [BezKolumny]
+        public bool HasNameError => string.IsNullOrWhiteSpace(Imie) || string.IsNullOrWhiteSpace(Nazwisko);
+
+        [Browsable(false)]
+        [BezKolumny]
+        public string NameToolTip => string.IsNullOrWhiteSpace(Imie) 
+            ? "Imię pracownika jest wymagane." 
+            : (string.IsNullOrWhiteSpace(Nazwisko) ? "Nazwisko pracownika jest wymagane." : "");
+
+        [Browsable(false)]
+        [BezKolumny]
+        public bool HasDocumentError => (string.IsNullOrWhiteSpace(Pesel) && string.IsNullOrWhiteSpace(Paszport) && string.IsNullOrWhiteSpace(Dowod) && string.IsNullOrWhiteSpace(PaszportBio)) ||
+                                        (!string.IsNullOrWhiteSpace(Paszport) && Paszport.Length > Services.ZusSchemaLimits.ZusSeriaNrDokMaxLen);
+
+        [Browsable(false)]
+        [BezKolumny]
+        public bool HasDocumentWarning => IsDuplicate && string.IsNullOrWhiteSpace(Pesel) && (!string.IsNullOrWhiteSpace(Paszport) || !string.IsNullOrWhiteSpace(Dowod));
+
+        [Browsable(false)]
+        [BezKolumny]
+        public string DocumentToolTip => (string.IsNullOrWhiteSpace(Pesel) && string.IsNullOrWhiteSpace(Paszport) && string.IsNullOrWhiteSpace(Dowod) && string.IsNullOrWhiteSpace(PaszportBio))
+            ? "Wymagany PESEL lub dokument tożsamości (paszport/dowód)."
+            : (!string.IsNullOrWhiteSpace(Paszport) && Paszport.Length > Services.ZusSchemaLimits.ZusSeriaNrDokMaxLen 
+                ? $"Numer paszportu przekracza dopuszczalny limit ZUS ({Services.ZusSchemaLimits.ZusSeriaNrDokMaxLen} znaków)." 
+                : (HasDocumentWarning ? "Osoba z tym dokumentem już istnieje w bazie." : ""));
+
+        [Browsable(false)]
+        [BezKolumny]
+        public bool HasBankError => !string.IsNullOrWhiteSpace(BankStr) && !Services.BankClearingResolver.ValidateIbanChecksum(BankStr);
+
+        [Browsable(false)]
+        [BezKolumny]
+        public bool HasBankWarning => !string.IsNullOrWhiteSpace(BankStr) && !HasBankError && string.IsNullOrWhiteSpace(BankNazwa);
+
+        [Browsable(false)]
+        [BezKolumny]
+        public string BankToolTip => HasBankError 
+            ? "Nieprawidłowy numer rachunku bankowego (błędna suma kontrolna IBAN)." 
+            : (!string.IsNullOrWhiteSpace(BankNazwa) ? $"Bank: {BankNazwa}" : "");
+
+        [Browsable(false)]
+        [BezKolumny]
+        public bool HasTaxOfficeWarning => SelectedOrganPodatkowy == null && !string.IsNullOrWhiteSpace(UrzadSkarbowy);
+
+        [Browsable(false)]
+        [BezKolumny]
+        public string TaxOfficeToolTip => HasTaxOfficeWarning 
+            ? $"Nie znaleziono urzędu skarbowego '{UrzadSkarbowy}' w bazie. Wybierz z listy." 
+            : (SelectedOrganPodatkowy?.Firma?.Nazwa ?? "");
+
+        [Browsable(false)]
+        [BezKolumny]
+        public bool HasAddressWarning => string.IsNullOrWhiteSpace(Miejscowosc) || string.IsNullOrWhiteSpace(NrDomu);
+
+        [Browsable(false)]
+        [BezKolumny]
+        public string AddressToolTip => string.IsNullOrWhiteSpace(Miejscowosc) 
+            ? "Brak miejscowości w adresie." 
+            : (string.IsNullOrWhiteSpace(NrDomu) ? "Brak numeru domu w adresie." : "");
+
+        [Browsable(false)]
+        [BezKolumny]
+        public bool HasDzialError => string.IsNullOrWhiteSpace(DzialNazwa);
+
+        [Browsable(false)]
+        [BezKolumny]
+        public string DzialToolTip => HasDzialError 
+            ? "Dział / Fabryka jest wymagany przed importem." 
+            : (DzialNazwa ?? "");
         private string imie = "";
         private string drugieImie = "";
         private string nazwisko = "";
@@ -161,6 +249,9 @@ namespace HrAppka_Import_Pracowników
         private string status = "Gotowy";
         private string ostrzezenia = "";
         private string urzadSkarbowy = "";
+        private string bankNazwa = "";
+        private string kodTytuluUbezpieczenia = "";
+        private string stawka = "";
 
         // Hiding auxiliary fields
         [Browsable(false)]
@@ -182,6 +273,8 @@ namespace HrAppka_Import_Pracowników
                     OnPropertyChanged(nameof(PracownikNazwa));
                     OnPropertyChanged(nameof(StatusLevel));
                     OnPropertyChanged(nameof(IsDuplicate));
+                    OnPropertyChanged(nameof(HasNameError));
+                    OnPropertyChanged(nameof(NameToolTip));
                 }
             }
         }
@@ -206,6 +299,8 @@ namespace HrAppka_Import_Pracowników
                     OnPropertyChanged(nameof(PracownikNazwa));
                     OnPropertyChanged(nameof(StatusLevel));
                     OnPropertyChanged(nameof(IsDuplicate));
+                    OnPropertyChanged(nameof(HasNameError));
+                    OnPropertyChanged(nameof(NameToolTip));
                 }
             }
         }
@@ -417,12 +512,51 @@ namespace HrAppka_Import_Pracowników
             set => SetProperty(ref email, value);
         }
 
+        [DisplayName("Nazwa banku")]
+        public string BankNazwa
+        {
+            get
+            {
+                if (string.IsNullOrWhiteSpace(bankNazwa) && !string.IsNullOrWhiteSpace(bankStr))
+                {
+                    bankNazwa = Services.BankClearingResolver.GetBankName(bankStr, "");
+                }
+                return bankNazwa;
+            }
+            set => SetProperty(ref bankNazwa, value);
+        }
+
+        [DisplayName("Tytuł ubezpieczenia")]
+        public string KodTytuluUbezpieczenia
+        {
+            get => kodTytuluUbezpieczenia;
+            set => SetProperty(ref kodTytuluUbezpieczenia, value);
+        }
+
+        [DisplayName("Stawka")]
+        public string Stawka
+        {
+            get => stawka;
+            set => SetProperty(ref stawka, value);
+        }
+
         [Browsable(false)]
         [BezKolumny]
         public string BankStr
         {
             get => bankStr;
-            set => SetProperty(ref bankStr, value);
+            set
+            {
+                if (SetProperty(ref bankStr, value))
+                {
+                    bankNazwa = Services.BankClearingResolver.GetBankName(value, "");
+                    OnPropertyChanged(nameof(BankNazwa));
+                    OnPropertyChanged(nameof(HasBankError));
+                    OnPropertyChanged(nameof(HasBankWarning));
+                    OnPropertyChanged(nameof(BankToolTip));
+                    OnPropertyChanged(nameof(StatusLevel));
+                }
+            }
         }
 
         [Browsable(false)]
@@ -522,6 +656,11 @@ namespace HrAppka_Import_Pracowników
                     }
                     OnPropertyChanged(nameof(StatusLevel));
                     OnPropertyChanged(nameof(IsDuplicate));
+                    OnPropertyChanged(nameof(HasPeselError));
+                    OnPropertyChanged(nameof(HasPeselWarning));
+                    OnPropertyChanged(nameof(PeselToolTip));
+                    OnPropertyChanged(nameof(HasDocumentError));
+                    OnPropertyChanged(nameof(DocumentToolTip));
                 }
             }
         }
@@ -533,7 +672,14 @@ namespace HrAppka_Import_Pracowników
         public string DzialNazwa
         {
             get => dzialNazwa;
-            set => SetProperty(ref dzialNazwa, value);
+            set
+            {
+                if (SetProperty(ref dzialNazwa, value))
+                {
+                    OnPropertyChanged(nameof(HasDzialError));
+                    OnPropertyChanged(nameof(DzialToolTip));
+                }
+            }
         }
 
         [DisplayName("Status")]

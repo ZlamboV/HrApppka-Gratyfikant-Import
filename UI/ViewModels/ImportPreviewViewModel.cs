@@ -50,6 +50,7 @@ namespace HrAppka_Import_Pracowników.UI.ViewModels
         public List<SzablonUmowyItem> AvailableTemplates { get; }
         public List<OrganPodatkowy> AvailableTaxOffices { get; }
         public List<DuplicateResolutionOption> DuplicateResolutions { get; }
+        public ObservableCollection<string> AvailableDepartments { get; }
 
         public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -89,6 +90,32 @@ namespace HrAppka_Import_Pracowników.UI.ViewModels
                 new() { Value = DecyzjaIstniejacyPracownik.NadpiszUmowe, DisplayName = "Nadpisz umowę" },
                 new() { Value = DecyzjaIstniejacyPracownik.PominWiersz, DisplayName = "Pomiń wiersz" }
             };
+
+            var depts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (_uchwyt != null)
+            {
+                try
+                {
+                    var dbDepts = _uchwyt.JednostkiOrganizacyjne()?.Dane?.Wszystkie()?.Select(d => d.Nazwa);
+                    if (dbDepts != null)
+                    {
+                        foreach (var d in dbDepts)
+                        {
+                            if (!string.IsNullOrWhiteSpace(d)) depts.Add(d.Trim());
+                        }
+                    }
+                }
+                catch { }
+            }
+            foreach (var k in SferaDictionaryCache.Instance.DepartmentsByName.Keys)
+            {
+                if (!string.IsNullOrWhiteSpace(k)) depts.Add(k.Trim());
+            }
+            foreach (var r in rows)
+            {
+                if (!string.IsNullOrWhiteSpace(r.DzialNazwa)) depts.Add(r.DzialNazwa.Trim());
+            }
+            AvailableDepartments = new ObservableCollection<string>(depts.OrderBy(d => d));
 
             // Domyślne przypisanie szablonu do wierszy, które go nie mają
             foreach (var r in rows)
@@ -219,14 +246,53 @@ namespace HrAppka_Import_Pracowników.UI.ViewModels
 
         private async Task StartImportAsync()
         {
-            var selectedRows = Rows.Where(r => r.IsSelected && r.StatusLevel != RowStatusLevel.CriticalError).ToList();
+            var selectedRows = Rows.Where(r => r.IsSelected).ToList();
             if (!selectedRows.Any())
             {
                 MessageBox.Show(
-                    "Nie wybrano żadnych poprawnych wierszy do zaimportowania (wiersze z błędami krytycznymi są pomijane).",
+                    "Nie wybrano żadnych wierszy do zaimportowania.",
                     "Import Pracowników",
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
+                return;
+            }
+
+            // 1. Walidacja wymaganego działu / fabryki przed rozpoczęciem importu
+            var missingDzialRows = selectedRows.Where(r => string.IsNullOrWhiteSpace(r.DzialNazwa)).ToList();
+            if (missingDzialRows.Any())
+            {
+                string sampleNames = string.Join(", ", missingDzialRows.Take(3).Select(r => $"{r.Nazwisko} {r.Imie}".Trim()));
+                if (missingDzialRows.Count > 3) sampleNames += $", ... (łącznie {missingDzialRows.Count})";
+
+                MessageBox.Show(
+                    $"Nie można rozpocząć importu!\n\nNastępujący zaznaczeni pracownicy nie mają przypisanego działu / fabryki:\n{sampleNames}\n\nProszę wybrać lub wpisać dział w kolumnie 'Dział / Fabryka' przed importem.",
+                    "Brakujący Dział / Fabryka",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+
+            // 2. Walidacja szablonu umowy
+            var missingTemplateRows = selectedRows.Where(r => r.SelectedSzablonUmowy == null).ToList();
+            if (missingTemplateRows.Any())
+            {
+                MessageBox.Show(
+                    "Nie można rozpocząć importu: co najmniej jeden z zaznaczonych pracowników nie ma przypisanego szablonu umowy.",
+                    "Wymagany Szablon Umowy",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+
+            // Pominięcie ewentualnych wierszy z błędami krytycznymi (np. brak imienia/nazwiska/dokumentu)
+            selectedRows = selectedRows.Where(r => r.StatusLevel != RowStatusLevel.CriticalError).ToList();
+            if (!selectedRows.Any())
+            {
+                MessageBox.Show(
+                    "Żaden z zaznaczonych wierszy nie spełnia wymagań importu (wiersze zawierają błędy krytyczne).",
+                    "Import Pracowników",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
                 return;
             }
 

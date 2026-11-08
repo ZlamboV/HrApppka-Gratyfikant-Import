@@ -169,12 +169,12 @@
                       HeadersVisibility="Column"
                       RowHeaderWidth="0"
                       Background="White"
+                      AlternatingRowBackground="#F9FAFC"
                       BorderThickness="0">
 
-                <!-- Row Validation Status Styling (Wymaganie R6) -->
+                <!-- Row Visual Styling: Clean rows without solid colored flooding -->
                 <DataGrid.RowStyle>
                     <Style TargetType="{x:Type DataGridRow}">
-                        <Setter Property="Background" Value="#FFFFFF" />
                         <Setter Property="BorderThickness" Value="0,0,0,1" />
                         <Setter Property="BorderBrush" Value="#EBEBEB" />
                         <Setter Property="ToolTip">
@@ -185,18 +185,12 @@
                             </Setter.Value>
                         </Setter>
                         <Style.Triggers>
-                            <!-- Critical Error (Missing name, invalid PESEL/doc) -> #FFDDDD -->
-                            <DataTrigger Binding="{Binding StatusLevel}" Value="CriticalError">
-                                <Setter Property="Background" Value="#FFDDDD" />
-                            </DataTrigger>
-                            <!-- Warning / Conflict (Duplicate employee in DB, unassigned tax office) -> #FFF9C4 -->
-                            <DataTrigger Binding="{Binding StatusLevel}" Value="Warning">
-                                <Setter Property="Background" Value="#FFF9C4" />
-                            </DataTrigger>
-                            <!-- Ready / Valid -> #E8F5E9 -->
-                            <DataTrigger Binding="{Binding StatusLevel}" Value="Ready">
-                                <Setter Property="Background" Value="#E8F5E9" />
-                            </DataTrigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#F0F7FF" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter Property="Background" Value="#E3F2FD" />
+                            </Trigger>
                         </Style.Triggers>
                     </Style>
                 </DataGrid.RowStyle>
@@ -205,17 +199,113 @@
                     <!-- CheckBox Wybór -->
                     <DataGridCheckBoxColumn Header="Wybór" Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="50" />
 
-                    <!-- Status (Second Column - Wymóg użytkownika) -->
-                    <DataGridTextColumn Header="Status" Binding="{Binding Status}" IsReadOnly="True" Width="140" FontWeight="SemiBold" />
+                    <!-- Status with visual indicator dot (Green/Orange/Red) -->
+                    <DataGridTemplateColumn Header="Status" Width="140" SortMemberPath="Status">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="6,2">
+                                    <Ellipse Width="9" Height="9" Margin="0,0,7,0">
+                                        <Ellipse.Style>
+                                            <Style TargetType="Ellipse">
+                                                <Setter Property="Fill" Value="#4CAF50" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding StatusLevel}" Value="CriticalError">
+                                                        <Setter Property="Fill" Value="#E53935" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding StatusLevel}" Value="Warning">
+                                                        <Setter Property="Fill" Value="#FB8C00" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Ellipse.Style>
+                                    </Ellipse>
+                                    <TextBlock Text="{Binding Status}" FontWeight="SemiBold" Foreground="#333333" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
 
-                    <!-- Pracownik (Nazwisko Imię) -->
-                    <DataGridTextColumn Header="Pracownik" Binding="{Binding PracownikNazwa, Mode=OneWay}" IsReadOnly="True" Width="160" FontWeight="SemiBold" />
+                    <!-- Pracownik (Nazwisko Imię) with cell-level validation border -->
+                    <DataGridTemplateColumn Header="Pracownik" Width="160" SortMemberPath="PracownikNazwa">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Border CornerRadius="3" Padding="4,2" Margin="2,1" BorderThickness="1.5">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="BorderBrush" Value="Transparent" />
+                                            <Setter Property="Background" Value="Transparent" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasNameError}" Value="True">
+                                                    <Setter Property="BorderBrush" Value="#DC2626" />
+                                                    <Setter Property="Background" Value="#FEF2F2" />
+                                                    <Setter Property="ToolTip" Value="{Binding NameToolTip}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <TextBlock Text="{Binding PracownikNazwa, Mode=OneWay}" FontWeight="SemiBold" Foreground="#222222" VerticalAlignment="Center" />
+                                </Border>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
 
-                    <!-- PESEL -->
-                    <DataGridTextColumn Header="PESEL" Binding="{Binding Pesel, UpdateSourceTrigger=PropertyChanged}" Width="105" />
+                    <!-- PESEL with cell-level validation border -->
+                    <DataGridTemplateColumn Header="PESEL" Width="110" SortMemberPath="Pesel">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Border CornerRadius="3" Padding="4,2" Margin="2,1" BorderThickness="1.5">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="BorderBrush" Value="Transparent" />
+                                            <Setter Property="Background" Value="Transparent" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasPeselWarning}" Value="True">
+                                                    <Setter Property="BorderBrush" Value="#D97706" />
+                                                    <Setter Property="Background" Value="#FFFBEB" />
+                                                    <Setter Property="ToolTip" Value="{Binding PeselToolTip}" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding HasPeselError}" Value="True">
+                                                    <Setter Property="BorderBrush" Value="#DC2626" />
+                                                    <Setter Property="Background" Value="#FEF2F2" />
+                                                    <Setter Property="ToolTip" Value="{Binding PeselToolTip}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <TextBlock Text="{Binding Pesel}" VerticalAlignment="Center" FontFamily="Consolas, Segoe UI" />
+                                </Border>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
 
-                    <!-- Dokument Tożsamości -->
-                    <DataGridTextColumn Header="Paszport / Dowód" Binding="{Binding Paszport}" Width="110" />
+                    <!-- Dokument Tożsamości with cell-level validation border -->
+                    <DataGridTemplateColumn Header="Paszport / Dowód" Width="120" SortMemberPath="Paszport">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Border CornerRadius="3" Padding="4,2" Margin="2,1" BorderThickness="1.5">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="BorderBrush" Value="Transparent" />
+                                            <Setter Property="Background" Value="Transparent" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasDocumentWarning}" Value="True">
+                                                    <Setter Property="BorderBrush" Value="#D97706" />
+                                                    <Setter Property="Background" Value="#FFFBEB" />
+                                                    <Setter Property="ToolTip" Value="{Binding DocumentToolTip}" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding HasDocumentError}" Value="True">
+                                                    <Setter Property="BorderBrush" Value="#DC2626" />
+                                                    <Setter Property="Background" Value="#FEF2F2" />
+                                                    <Setter Property="ToolTip" Value="{Binding DocumentToolTip}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <TextBlock Text="{Binding Paszport}" VerticalAlignment="Center" />
+                                </Border>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
 
                     <!-- Interactive Inline ComboBox: Szablon Umowy (Wymaganie R6) -->
                     <DataGridTemplateColumn Header="Szablon umowy" Width="180">
@@ -229,15 +319,30 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <!-- Interactive Inline ComboBox: Urząd Skarbowy z wyszukiwarką tekstową (Wymaganie R6) -->
+                    <!-- Interactive Inline ComboBox: Urząd Skarbowy z wyszukiwarką tekstową i podświetleniem braku -->
                     <DataGridTemplateColumn Header="Urząd Skarbowy" Width="220">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <ComboBox ItemsSource="{Binding DataContext.AvailableTaxOffices, RelativeSource={RelativeSource AncestorType=Window}}"
-                                          SelectedItem="{Binding SelectedOrganPodatkowy, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                          DisplayMemberPath="Firma.Nazwa"
-                                          IsEditable="True"
-                                          IsTextSearchEnabled="True" />
+                                <Border CornerRadius="3" Padding="2" Margin="1" BorderThickness="1.5">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="BorderBrush" Value="Transparent" />
+                                            <Setter Property="Background" Value="Transparent" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasTaxOfficeWarning}" Value="True">
+                                                    <Setter Property="BorderBrush" Value="#D97706" />
+                                                    <Setter Property="Background" Value="#FFFBEB" />
+                                                    <Setter Property="ToolTip" Value="{Binding TaxOfficeToolTip}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <ComboBox ItemsSource="{Binding DataContext.AvailableTaxOffices, RelativeSource={RelativeSource AncestorType=Window}}"
+                                              SelectedItem="{Binding SelectedOrganPodatkowy, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              DisplayMemberPath="Firma.Nazwa"
+                                              IsEditable="True"
+                                              IsTextSearchEnabled="True" />
+                                </Border>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
@@ -255,8 +360,33 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <!-- Dział -->
-                    <DataGridTextColumn Header="Dział" Binding="{Binding DzialNazwa}" Width="110" />
+                    <!-- Dział / Fabryka with inline editable ComboBox and validation border -->
+                    <DataGridTemplateColumn Header="Dział / Fabryka" Width="160" SortMemberPath="DzialNazwa">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Border CornerRadius="3" Padding="2" Margin="1" BorderThickness="1.5">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="BorderBrush" Value="Transparent" />
+                                            <Setter Property="Background" Value="Transparent" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasDzialError}" Value="True">
+                                                    <Setter Property="BorderBrush" Value="#DC2626" />
+                                                    <Setter Property="Background" Value="#FEF2F2" />
+                                                    <Setter Property="ToolTip" Value="{Binding DzialToolTip}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <ComboBox ItemsSource="{Binding DataContext.AvailableDepartments, RelativeSource={RelativeSource AncestorType=Window}}"
+                                              Text="{Binding DzialNazwa, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              SelectedItem="{Binding DzialNazwa, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              IsEditable="True"
+                                              IsTextSearchEnabled="True" />
+                                </Border>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
 
                     <!-- Data Rozpoczęcia -->
                     <DataGridTextColumn Header="Od dnia" Binding="{Binding DataRozpoczecia}" Width="85" />
@@ -279,8 +409,29 @@
                     <!-- Nr lokalu -->
                     <DataGridTextColumn Header="Nr lokalu" Binding="{Binding NrLokalu}" Width="70" />
 
-                    <!-- Kod pocztowy -->
-                    <DataGridTextColumn Header="Kod pocztowy" Binding="{Binding KodPocztowy}" Width="90" />
+                    <!-- Kod pocztowy with address warning border -->
+                    <DataGridTemplateColumn Header="Kod pocztowy" Width="95" SortMemberPath="KodPocztowy">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Border CornerRadius="3" Padding="4,2" Margin="2,1" BorderThickness="1.5">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="BorderBrush" Value="Transparent" />
+                                            <Setter Property="Background" Value="Transparent" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasAddressWarning}" Value="True">
+                                                    <Setter Property="BorderBrush" Value="#D97706" />
+                                                    <Setter Property="Background" Value="#FFFBEB" />
+                                                    <Setter Property="ToolTip" Value="{Binding AddressToolTip}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <TextBlock Text="{Binding KodPocztowy}" VerticalAlignment="Center" FontFamily="Consolas, Segoe UI" />
+                                </Border>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
 
                     <!-- Gmina -->
                     <DataGridTextColumn Header="Gmina" Binding="{Binding Gmina}" Width="100" />
@@ -303,14 +454,59 @@
                     <!-- Email -->
                     <DataGridTextColumn Header="Email" Binding="{Binding Email}" Width="150" />
 
-                    <!-- Rachunek bankowy -->
-                    <DataGridTextColumn Header="Rachunek bankowy" Binding="{Binding BankStr}" Width="180" />
+                    <!-- Rachunek bankowy (z automatyczną nazwą banku i weryfikacją) -->
+                    <DataGridTemplateColumn Header="Rachunek bankowy" Width="220" SortMemberPath="BankStr">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Border CornerRadius="3" Padding="4,2" Margin="2,1" BorderThickness="1.5">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="BorderBrush" Value="Transparent" />
+                                            <Setter Property="Background" Value="Transparent" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasBankWarning}" Value="True">
+                                                    <Setter Property="BorderBrush" Value="#D97706" />
+                                                    <Setter Property="Background" Value="#FFFBEB" />
+                                                    <Setter Property="ToolTip" Value="{Binding BankToolTip}" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding HasBankError}" Value="True">
+                                                    <Setter Property="BorderBrush" Value="#DC2626" />
+                                                    <Setter Property="Background" Value="#FEF2F2" />
+                                                    <Setter Property="ToolTip" Value="{Binding BankToolTip}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding BankStr}" FontFamily="Consolas, Segoe UI" FontSize="11" Foreground="#111111" />
+                                        <TextBlock Text="{Binding BankNazwa}" FontSize="10" Foreground="#005A9E" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Margin="0,1,0,0">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Style.Triggers>
+                                                        <Trigger Property="Text" Value="">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                        </Trigger>
+                                                        <Trigger Property="Text" Value="{x:Null}">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                        </Trigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
 
                     <!-- NFZ -->
                     <DataGridTextColumn Header="NFZ" Binding="{Binding NfzStr}" Width="70" />
 
                     <!-- Kod zawodu -->
                     <DataGridTextColumn Header="Kod zawodu" Binding="{Binding KodZawodu}" Width="90" />
+
+                    <!-- Kod ZUS (Tytuł ubezpieczenia) -->
+                    <DataGridTextColumn Header="Kod ZUS" Binding="{Binding KodTytuluUbezpieczenia}" Width="85" />
 
                     <!-- Student -->
                     <DataGridTextColumn Header="Student" Binding="{Binding JestStudentem}" Width="75" />
