@@ -12,6 +12,13 @@
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
     <RootNamespace>HrAppka_Import_Pracowników</RootNamespace>
     <AssemblyName>HrAppka_Import_Pracowników</AssemblyName>
+    <Title>Import Pracowników</Title>
+    <Product>Import Pracowników</Product>
+    <Description>Wtyczka importu pracowników dla Gratyfikant Nexo Pro</Description>
+    <Company>Antigravity Dev Team</Company>
+    <Version>1.0.8.20</Version>
+    <AssemblyVersion>1.0.8.20</AssemblyVersion>
+    <FileVersion>1.0.8.20</FileVersion>
 
     <nexoSdkBinPath>C:\Users\zasc2\AppData\Local\InsERT\Deployments\Nexo\KLINEX SP_Z_O_Oa4bfb87390e94eea9\Binaries\</nexoSdkBinPath>
     <nexoSdkNarzedziaPath>C:\ NEXO SDK SFERA\nexoSDK_61.0.4.9400\Narzedzia\</nexoSdkNarzedziaPath>
@@ -22,7 +29,11 @@
       <HintPath>$(nexoSdkBinPath)InsERT.Mox.Launcher.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="Microsoft.Data.SqlClient">
+        <Reference Include="Microsoft.Data.Sqlite">
+      <HintPath>$(nexoSdkBinPath)Microsoft.Data.Sqlite.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+<Reference Include="Microsoft.Data.SqlClient">
       <HintPath>$(nexoSdkBinPath)Microsoft.Data.SqlClient.dll</HintPath>
       <Private>false</Private>
     </Reference>
@@ -54,10 +65,25 @@
       <HintPath>$(nexoSdkBinPath)InsERT.Mox.EntityFrameworkSupport.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="InsERT.Moria.DeklaracjeZUS">
+      <HintPath>$(nexoSdkBinPath)InsERT.Moria.DeklaracjeZUS.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="InsERT.Moria.API.Private">
+      <HintPath>$(nexoSdkBinPath)InsERT.Moria.API.Private.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="MiniExcel" Version="1.34.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Remove="Instalator\**" />
+    <Page Remove="Instalator\**" />
+    <Resource Remove="Instalator\**" />
+    <EmbeddedResource Remove="Instalator\**" />
+    <None Remove="Instalator\**" />
   </ItemGroup>
 
   <ItemGroup>
@@ -70,9 +96,16 @@
     <None Update="ParametryInstalacji.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="Obywatelstwa_ZUS.csv">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Obywatelstwa_ZUS.csv" />
   </ItemGroup>
 
   <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <Exec Command="if exist &quot;$(nexoSdkNarzedziaPath)PackageAndInstallerBuilder.exe&quot; (call &quot;$(nexoSdkNarzedziaPath)PackageAndInstallerBuilder.exe&quot; /PlikKonfiguracji:Konfiguracja.xml /KatalogDocelowy:&quot;$(TargetDir)\&quot;) else (echo Nie można zbudować pakietu i instalatora, ponieważ nie istnieje plik: &quot;$(nexoSdkNarzedziaPath)PackageAndInstallerBuilder.exe&quot;)" />
+    <Exec Command="if exist &quot;$(nexoSdkNarzedziaPath)PackageAndInstallerBuilder.exe&quot; (call &quot;$(nexoSdkNarzedziaPath)PackageAndInstallerBuilder.exe&quot; /PlikKonfiguracji:Konfiguracja.xml /KatalogDocelowy:&quot;$(TargetDir)\&quot;) else (echo Nie mo�na zbudowa� pakietu i instalatora, poniewa� nie istnieje plik: &quot;$(nexoSdkNarzedziaPath)PackageAndInstallerBuilder.exe&quot;)" />
   </Target>
 </Project>

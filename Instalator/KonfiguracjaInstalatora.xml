@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?><Konfiguracja>
-    <Tytul>Instalator integracji HrAppka</Tytul>
-    <TekstPowitalny>Wytawy w instalatorze wtyczki importującej dane z HrAppka do Gratyfikant Nexo Pro.</TekstPowitalny>
+    <Tytul>Instalator wtyczki Import Pracowników</Tytul>
+    <TekstPowitalny>Witamy w instalatorze wtyczki importującej dane pracowników do Gratyfikant Nexo Pro.</TekstPowitalny>
     <DostawcaInfo>Copyright © 2026 Antigravity Dev Team</DostawcaInfo>
     <UtworzSkrotNaPulpicie>false</UtworzSkrotNaPulpicie>
     <UtworzSkrotWMenuStart>false</UtworzSkrotWMenuStart>
@@ -8,5 +8,5 @@
     <KiP2>false</KiP2>
     <PlikLogo />
     <PlikLicencji />
-    <PlikWynikowy>HrAppka_Import_Pracowników-1.0.8.13.exe</PlikWynikowy>
-  <Pakiet>C:\ NEXO SDK SFERA\HrAppka Import Pracowników\Pakiet\HrAppka_Import_Pracowników-1.0.8.13.mpkg</Pakiet></Konfiguracja>
+    <PlikWynikowy>HrAppka_Import_Pracowników-1.0.8.20.exe</PlikWynikowy>
+  <Pakiet>C:\ NEXO SDK SFERA\HrAppka Import Pracowników\Pakiet\HrAppka_Import_Pracowników-1.0.8.20.mpkg</Pakiet></Konfiguracja>

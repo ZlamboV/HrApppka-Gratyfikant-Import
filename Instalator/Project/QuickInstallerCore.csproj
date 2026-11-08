@@ -1,0 +1,96 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+  </PropertyGroup>
+  <PropertyGroup>
+    <AssemblyName>HrAppka_Import_Pracowników-1.0.8.14</AssemblyName>
+    <RootNamespace>InsERT.Mox.QuickInstallerCore</RootNamespace>
+    <OutputType>WinExe</OutputType>
+    <ProjectTypeGuids>{60dc8134-eba5-43b8-bcc9-bb4bc16c2548};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
+    <ProjectGuid>{EFB1BA1A-EF14-4B59-8B5B-9D91932D41AD}</ProjectGuid>
+    <ApplicationIcon>install.ico</ApplicationIcon>
+  </PropertyGroup>
+  <PropertyGroup>
+    <TargetFrameworks>net8.0-windows10.0.17763.0</TargetFrameworks>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <PublishSingleFile>true</PublishSingleFile>
+    <PlatformTarget>$(SharedPlatformTarget)</PlatformTarget>
+  </PropertyGroup>
+  <PropertyGroup>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <PropertyGroup>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <EnableDefaultItems>false</EnableDefaultItems>
+    <EnableDefaultPageItems>false</EnableDefaultPageItems>
+    <EnableDefaultApplicationDefinition>false</EnableDefaultApplicationDefinition>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="AssemblyInfo.cs" />
+    <Compile Include="DatabaseInfoWrapper.cs" />
+    <Compile Include="DeployParameters.cs" />
+    <Compile Include="DeployParametersParser.cs" />
+    <Compile Include="DeployParametersValidator.cs" />
+    <Compile Include="InstallationConfig.cs" />
+    <Compile Include="InstallationCfgXmlSerialization.cs" />
+    <Compile Include="InstallationConfigExtensions.cs" />
+    <Compile Include="Installer.cs" />
+    <Compile Include="KnownProducts.cs" />
+    <Compile Include="MessageEventArgs.cs" />
+    <Compile Include="LauncherSupport.cs" />
+    <Compile Include="Logger.cs" />
+    <Compile Include="Msi.cs" />
+    <Compile Include="NativeMethods.cs" />
+    <Compile Include="PackageDeployerAdapter.cs" />
+    <Compile Include="Payload.cs" />
+    <Compile Include="Product.cs" />
+    <Compile Include="ProductInfo.cs" />
+    <Compile Include="QuickInstallerException.cs" />
+    <Compile Include="ResourceReader.cs" />
+    <Compile Include="Resources.Designer.cs">
+      <DependentUpon>Resources.resx</DependentUpon>
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+    </Compile>
+    <Compile Include="Shortcut.cs" />
+    <Compile Include="ShortcutCfg.cs" />
+    <Compile Include="TemporaryPayload.cs" />
+    <Compile Include="UIElementExtension.cs" />
+    <Compile Include="UnhandledExceptions.cs" />
+    <Compile Include="WaitCursorInScope.cs" />
+    <Compile Include="WindowlessInstallation.cs" />
+    <Compile Include="Xml\AssemblyInfo.cs" />
+    <Compile Include="Xml\Skrot.cs" />
+  </ItemGroup>
+  <ItemGroup />
+  <ItemGroup>
+    <Compile Include="App.xaml.cs">
+      <DependentUpon>App.xaml</DependentUpon>
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="MainWindow.xaml.cs">
+      <DependentUpon>MainWindow.xaml</DependentUpon>
+      <SubType>Code</SubType>
+    </Compile>
+    <Content Include="global.json" />
+    <Page Include="App.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <EmbeddedResource Include="Resources.resx">
+      <SubType>Designer</SubType>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+      <Generator>ResXFileCodeGenerator</Generator>
+    </EmbeddedResource>
+    <Page Include="MainWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="install.ico" />
+    <Resource Include="Resources\nexo.ico" />
+  </ItemGroup>
+</Project>

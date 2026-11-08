@@ -2,4 +2,4 @@
 UwierzytelnianieWindows=Nie
 Uzytkownik=sa
 Haslo=
-BazaDanych=Nexo_EUROSUPPORT OUTSOURCING
+BazaDanych=Nexo_EUROSUPPORT_GROUP

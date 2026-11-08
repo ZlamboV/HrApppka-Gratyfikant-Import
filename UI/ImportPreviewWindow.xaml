@@ -1,0 +1,588 @@
+<Window x:Class="HrAppka_Import_Pracowników.UI.ImportPreviewWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="Import Pracowników - Podgląd i Parametryzacja Danych" 
+        Height="720" Width="1200"
+        MinHeight="550" MinWidth="900"
+        WindowStartupLocation="CenterOwner"
+        Background="#F5F5F7"
+        TextOptions.TextFormattingMode="Display"
+        UseLayoutRounding="True">
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisConverter" />
+
+        <!-- Clean Flat Button Style -->
+        <Style TargetType="Button" x:Key="FlatActionButton">
+            <Setter Property="Padding" Value="14,6" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Background" Value="#0078D7" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" 
+                                CornerRadius="4" 
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#005A9E" />
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Background" Value="#CCCCCC" />
+                    <Setter Property="Foreground" Value="#888888" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style TargetType="Button" x:Key="SecondaryActionButton" BasedOn="{StaticResource FlatActionButton}">
+            <Setter Property="Background" Value="#E0E0E0" />
+            <Setter Property="Foreground" Value="#333333" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#D0D0D0" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <!-- 0: Header & Summary Cards -->
+            <RowDefinition Height="Auto" />
+            <!-- 1: Search & Filter Toolbar -->
+            <RowDefinition Height="Auto" />
+            <!-- 2: Virtualized DataGrid (Occupies remaining height) -->
+            <RowDefinition Height="*" />
+            <!-- 3: Async Progress & Action Buttons -->
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- 0: Header & Summary Badges -->
+        <Border Grid.Row="0" Background="White" CornerRadius="6" Padding="14,10" Margin="0,0,0,12" BorderBrush="#E0E0E0" BorderThickness="1">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                    <TextBlock Text="Import Pracowników do Gratyfikant Nexo Pro" FontSize="18" FontWeight="Bold" Foreground="#222222" />
+                    <TextBlock Text="Zweryfikuj poprawność wierszy, przypisz szablony umów i urzędy skarbowe przed importem." FontSize="12" Foreground="#666666" Margin="0,2,0,0" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <!-- Total Count Card -->
+                    <Border Background="#F0F4F8" CornerRadius="4" Padding="10,6" Margin="4,0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Wszystkie: " FontWeight="Normal" Foreground="#555555" />
+                            <TextBlock Text="{Binding TotalCount}" FontWeight="Bold" Foreground="#111111" />
+                        </StackPanel>
+                    </Border>
+                    <!-- Ready Count Card -->
+                    <Border Background="#E8F5E9" CornerRadius="4" Padding="10,6" Margin="4,0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Gotowe: " FontWeight="Normal" Foreground="#2E7D32" />
+                            <TextBlock Text="{Binding ReadyCount}" FontWeight="Bold" Foreground="#1B5E20" />
+                        </StackPanel>
+                    </Border>
+                    <!-- Warning Count Card -->
+                    <Border Background="#FFF9C4" CornerRadius="4" Padding="10,6" Margin="4,0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Ostrzeżenia: " FontWeight="Normal" Foreground="#F57F17" />
+                            <TextBlock Text="{Binding WarningCount}" FontWeight="Bold" Foreground="#E65100" />
+                        </StackPanel>
+                    </Border>
+                    <!-- Error Count Card -->
+                    <Border Background="#FFDDDD" CornerRadius="4" Padding="10,6" Margin="4,0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Błędy krytyczne: " FontWeight="Normal" Foreground="#C62828" />
+                            <TextBlock Text="{Binding ErrorCount}" FontWeight="Bold" Foreground="#B71C1C" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- 1: Search & Filter Toolbar -->
+        <Border Grid.Row="1" Background="White" CornerRadius="6" Padding="10,8" Margin="0,0,0,8" BorderBrush="#E0E0E0" BorderThickness="1">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0" Text="Filtruj status:" VerticalAlignment="Center" Margin="0,0,8,0" FontWeight="SemiBold" />
+                <ComboBox Grid.Column="1" Width="140" SelectedValue="{Binding SelectedStatusFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedValuePath="Content" VerticalAlignment="Center">
+                    <ComboBoxItem Content="Wszystkie" IsSelected="True" />
+                    <ComboBoxItem Content="Gotowe" />
+                    <ComboBoxItem Content="Ostrzeżenia" />
+                    <ComboBoxItem Content="Błędy" />
+                </ComboBox>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="20,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="Szukaj:" VerticalAlignment="Center" Margin="0,0,8,0" FontWeight="SemiBold" />
+                    <TextBox Width="220" Text="{Binding FilterText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" VerticalContentAlignment="Center" Padding="4,2" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="Zaznacz wszystkie" Command="{Binding SelectAllCommand}" Style="{StaticResource SecondaryActionButton}" Margin="0,0,6,0" Padding="8,4" />
+                    <Button Content="Odznacz wszystkie" Command="{Binding DeselectAllCommand}" Style="{StaticResource SecondaryActionButton}" Padding="8,4" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- 2: High-Performance Virtualized DataGrid -->
+        <!-- Wymaganie R6: VirtualizingStackPanel.IsVirtualizing="True", VirtualizingPanel.ScrollUnit="Item", EnableRowVirtualization="True", VirtualizingPanel.VirtualizationMode="Recycling" -->
+        <Border Grid.Row="2" Background="White" CornerRadius="6" BorderBrush="#E0E0E0" BorderThickness="1">
+            <DataGrid x:Name="EmployeesDataGrid"
+                      ItemsSource="{Binding RowsView}"
+                      AutoGenerateColumns="False"
+                      CanUserAddRows="False"
+                      CanUserDeleteRows="False"
+                      CanUserReorderColumns="False"
+                      CanUserResizeRows="False"
+                      EnableRowVirtualization="True"
+                      VirtualizingStackPanel.IsVirtualizing="True"
+                      VirtualizingPanel.VirtualizationMode="Recycling"
+                      VirtualizingPanel.ScrollUnit="Item"
+                      ScrollViewer.CanContentScroll="True"
+                      ScrollViewer.VerticalScrollBarVisibility="Auto"
+                      ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                      CanUserResizeColumns="True"
+                      SelectionMode="Extended"
+                      SelectionUnit="FullRow"
+                      GridLinesVisibility="Horizontal"
+                      HeadersVisibility="Column"
+                      RowHeaderWidth="0"
+                      Background="White"
+                      AlternatingRowBackground="#F9FAFC"
+                      BorderThickness="0">
+
+                <!-- Row Visual Styling: Clean rows without solid colored flooding -->
+                <DataGrid.RowStyle>
+                    <Style TargetType="{x:Type DataGridRow}">
+                        <Setter Property="BorderThickness" Value="0,0,0,1" />
+                        <Setter Property="BorderBrush" Value="#EBEBEB" />
+                        <Setter Property="ToolTip">
+                            <Setter.Value>
+                                <ToolTip>
+                                    <TextBlock Text="{Binding Ostrzezenia}" />
+                                </ToolTip>
+                            </Setter.Value>
+                        </Setter>
+                        <Style.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#F0F7FF" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter Property="Background" Value="#E3F2FD" />
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </DataGrid.RowStyle>
+
+                <DataGrid.Columns>
+                    <!-- CheckBox Wybór -->
+                    <DataGridCheckBoxColumn Header="Wybór" Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="50" />
+
+                    <!-- Status with visual indicator dot (Green/Orange/Red) -->
+                    <DataGridTemplateColumn Header="Status" Width="140" SortMemberPath="Status">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="6,2">
+                                    <Ellipse Width="9" Height="9" Margin="0,0,7,0">
+                                        <Ellipse.Style>
+                                            <Style TargetType="Ellipse">
+                                                <Setter Property="Fill" Value="#4CAF50" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding StatusLevel}" Value="CriticalError">
+                                                        <Setter Property="Fill" Value="#E53935" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding StatusLevel}" Value="Warning">
+                                                        <Setter Property="Fill" Value="#FB8C00" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Ellipse.Style>
+                                    </Ellipse>
+                                    <TextBlock Text="{Binding Status}" FontWeight="SemiBold" Foreground="#333333" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <!-- Pracownik (Nazwisko Imię) with cell-level validation border -->
+                    <DataGridTemplateColumn Header="Pracownik" Width="160" SortMemberPath="PracownikNazwa">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Border CornerRadius="3" Padding="4,2" Margin="2,1" BorderThickness="1.5">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="BorderBrush" Value="Transparent" />
+                                            <Setter Property="Background" Value="Transparent" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasNameError}" Value="True">
+                                                    <Setter Property="BorderBrush" Value="#DC2626" />
+                                                    <Setter Property="Background" Value="#FEF2F2" />
+                                                    <Setter Property="ToolTip" Value="{Binding NameToolTip}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <TextBlock Text="{Binding PracownikNazwa, Mode=OneWay}" FontWeight="SemiBold" Foreground="#222222" VerticalAlignment="Center" />
+                                </Border>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <!-- PESEL with cell-level validation border -->
+                    <DataGridTemplateColumn Header="PESEL" Width="110" SortMemberPath="Pesel">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Border CornerRadius="3" Padding="4,2" Margin="2,1" BorderThickness="1.5">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="BorderBrush" Value="Transparent" />
+                                            <Setter Property="Background" Value="Transparent" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasPeselWarning}" Value="True">
+                                                    <Setter Property="BorderBrush" Value="#D97706" />
+                                                    <Setter Property="Background" Value="#FFFBEB" />
+                                                    <Setter Property="ToolTip" Value="{Binding PeselToolTip}" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding HasPeselError}" Value="True">
+                                                    <Setter Property="BorderBrush" Value="#DC2626" />
+                                                    <Setter Property="Background" Value="#FEF2F2" />
+                                                    <Setter Property="ToolTip" Value="{Binding PeselToolTip}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <TextBlock Text="{Binding Pesel}" VerticalAlignment="Center" FontFamily="Consolas, Segoe UI" />
+                                </Border>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <!-- Dokument Tożsamości with cell-level validation border -->
+                    <DataGridTemplateColumn Header="Paszport / Dowód" Width="120" SortMemberPath="Paszport">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Border CornerRadius="3" Padding="4,2" Margin="2,1" BorderThickness="1.5">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="BorderBrush" Value="Transparent" />
+                                            <Setter Property="Background" Value="Transparent" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasDocumentWarning}" Value="True">
+                                                    <Setter Property="BorderBrush" Value="#D97706" />
+                                                    <Setter Property="Background" Value="#FFFBEB" />
+                                                    <Setter Property="ToolTip" Value="{Binding DocumentToolTip}" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding HasDocumentError}" Value="True">
+                                                    <Setter Property="BorderBrush" Value="#DC2626" />
+                                                    <Setter Property="Background" Value="#FEF2F2" />
+                                                    <Setter Property="ToolTip" Value="{Binding DocumentToolTip}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <TextBlock Text="{Binding Paszport}" VerticalAlignment="Center" />
+                                </Border>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <!-- Interactive Inline ComboBox: Szablon Umowy (Wymaganie R6) -->
+                    <DataGridTemplateColumn Header="Szablon umowy" Width="180">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <ComboBox ItemsSource="{Binding DataContext.AvailableTemplates, RelativeSource={RelativeSource AncestorType=Window}}"
+                                          SelectedItem="{Binding SelectedSzablonUmowy, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                          DisplayMemberPath="Nazwa"
+                                          ToolTip="{Binding SelectedSzablonUmowy.Opis}" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <!-- Interactive Inline ComboBox: Urząd Skarbowy z wyszukiwarką tekstową i podświetleniem braku -->
+                    <DataGridTemplateColumn Header="Urząd Skarbowy" Width="220">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Border CornerRadius="3" Padding="2" Margin="1" BorderThickness="1.5">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="BorderBrush" Value="Transparent" />
+                                            <Setter Property="Background" Value="Transparent" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasTaxOfficeWarning}" Value="True">
+                                                    <Setter Property="BorderBrush" Value="#D97706" />
+                                                    <Setter Property="Background" Value="#FFFBEB" />
+                                                    <Setter Property="ToolTip" Value="{Binding TaxOfficeToolTip}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <ComboBox ItemsSource="{Binding DataContext.AvailableTaxOffices, RelativeSource={RelativeSource AncestorType=Window}}"
+                                              SelectedItem="{Binding SelectedOrganPodatkowy, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              DisplayMemberPath="Firma.Nazwa"
+                                              IsEditable="True"
+                                              IsTextSearchEnabled="True" />
+                                </Border>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <!-- Interactive Inline ComboBox: Akcja dla duplikatu (Wymaganie R6) -->
+                    <DataGridTemplateColumn Header="Akcja dla duplikatu" Width="190">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <ComboBox ItemsSource="{Binding DataContext.DuplicateResolutions, RelativeSource={RelativeSource AncestorType=Window}}"
+                                          SelectedValue="{Binding DecyzjaDlaIstniejacego, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                          SelectedValuePath="Value"
+                                          DisplayMemberPath="DisplayName"
+                                          IsEnabled="{Binding IsDuplicate}" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <!-- Dział / Fabryka with inline editable ComboBox and validation border -->
+                    <DataGridTemplateColumn Header="Dział / Fabryka" Width="160" SortMemberPath="DzialNazwa">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Border CornerRadius="3" Padding="2" Margin="1" BorderThickness="1.5">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="BorderBrush" Value="Transparent" />
+                                            <Setter Property="Background" Value="Transparent" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasDzialError}" Value="True">
+                                                    <Setter Property="BorderBrush" Value="#DC2626" />
+                                                    <Setter Property="Background" Value="#FEF2F2" />
+                                                    <Setter Property="ToolTip" Value="{Binding DzialToolTip}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <ComboBox ItemsSource="{Binding DataContext.AvailableDepartments, RelativeSource={RelativeSource AncestorType=Window}}"
+                                              Text="{Binding DzialNazwa, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              SelectedItem="{Binding DzialNazwa, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              IsEditable="True"
+                                              IsTextSearchEnabled="True" />
+                                </Border>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <!-- Data Rozpoczęcia -->
+                    <DataGridTextColumn Header="Od dnia" Binding="{Binding DataRozpoczecia}" Width="85" />
+
+                    <!-- Data Zakończenia -->
+                    <DataGridTextColumn Header="Do dnia" Binding="{Binding DataZakonczenia}" Width="85" />
+
+                    <!-- Data Zawarcia -->
+                    <DataGridTextColumn Header="Data zawarcia" Binding="{Binding DataZawarcia}" Width="90" />
+
+                    <!-- Miejscowość -->
+                    <DataGridTextColumn Header="Miejscowość" Binding="{Binding Miejscowosc}" Width="120" />
+
+                    <!-- Ulica -->
+                    <DataGridTextColumn Header="Ulica" Binding="{Binding Ulica}" Width="120" />
+
+                    <!-- Nr domu -->
+                    <DataGridTextColumn Header="Nr domu" Binding="{Binding NrDomu}" Width="70" />
+
+                    <!-- Nr lokalu -->
+                    <DataGridTextColumn Header="Nr lokalu" Binding="{Binding NrLokalu}" Width="70" />
+
+                    <!-- Kod pocztowy with address warning border -->
+                    <DataGridTemplateColumn Header="Kod pocztowy" Width="95" SortMemberPath="KodPocztowy">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Border CornerRadius="3" Padding="4,2" Margin="2,1" BorderThickness="1.5">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="BorderBrush" Value="Transparent" />
+                                            <Setter Property="Background" Value="Transparent" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasAddressWarning}" Value="True">
+                                                    <Setter Property="BorderBrush" Value="#D97706" />
+                                                    <Setter Property="Background" Value="#FFFBEB" />
+                                                    <Setter Property="ToolTip" Value="{Binding AddressToolTip}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <TextBlock Text="{Binding KodPocztowy}" VerticalAlignment="Center" FontFamily="Consolas, Segoe UI" />
+                                </Border>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <!-- Gmina -->
+                    <DataGridTextColumn Header="Gmina" Binding="{Binding Gmina}" Width="100" />
+
+                    <!-- Powiat -->
+                    <DataGridTextColumn Header="Powiat" Binding="{Binding Powiat}" Width="100" />
+
+                    <!-- Województwo -->
+                    <DataGridTextColumn Header="Województwo" Binding="{Binding Wojewodztwo}" Width="110" />
+
+                    <!-- Kraj -->
+                    <DataGridTextColumn Header="Kraj" Binding="{Binding Kraj}" Width="90" />
+
+                    <!-- Obywatelstwo -->
+                    <DataGridTextColumn Header="Obywatelstwo" Binding="{Binding Obywatelstwo}" Width="100" />
+
+                    <!-- Telefon -->
+                    <DataGridTextColumn Header="Telefon" Binding="{Binding Telefon}" Width="110" />
+
+                    <!-- Email -->
+                    <DataGridTextColumn Header="Email" Binding="{Binding Email}" Width="150" />
+
+                    <!-- Rachunek bankowy (z automatyczną nazwą banku i weryfikacją) -->
+                    <DataGridTemplateColumn Header="Rachunek bankowy" Width="220" SortMemberPath="BankStr">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Border CornerRadius="3" Padding="4,2" Margin="2,1" BorderThickness="1.5">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="BorderBrush" Value="Transparent" />
+                                            <Setter Property="Background" Value="Transparent" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasBankWarning}" Value="True">
+                                                    <Setter Property="BorderBrush" Value="#D97706" />
+                                                    <Setter Property="Background" Value="#FFFBEB" />
+                                                    <Setter Property="ToolTip" Value="{Binding BankToolTip}" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding HasBankError}" Value="True">
+                                                    <Setter Property="BorderBrush" Value="#DC2626" />
+                                                    <Setter Property="Background" Value="#FEF2F2" />
+                                                    <Setter Property="ToolTip" Value="{Binding BankToolTip}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding BankStr}" FontFamily="Consolas, Segoe UI" FontSize="11" Foreground="#111111" />
+                                        <TextBlock Text="{Binding BankNazwa}" FontSize="10" Foreground="#005A9E" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Margin="0,1,0,0">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Style.Triggers>
+                                                        <Trigger Property="Text" Value="">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                        </Trigger>
+                                                        <Trigger Property="Text" Value="{x:Null}">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                        </Trigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <!-- NFZ -->
+                    <DataGridTextColumn Header="NFZ" Binding="{Binding NfzStr}" Width="70" />
+
+                    <!-- Kod zawodu -->
+                    <DataGridTextColumn Header="Kod zawodu" Binding="{Binding KodZawodu}" Width="90" />
+
+                    <!-- Kod ZUS (Tytuł ubezpieczenia) -->
+                    <DataGridTextColumn Header="Kod ZUS" Binding="{Binding KodTytuluUbezpieczenia}" Width="85" />
+
+                    <!-- Student -->
+                    <DataGridTextColumn Header="Student" Binding="{Binding JestStudentem}" Width="75" />
+
+                    <!-- Ostrzeżenia -->
+                    <DataGridTextColumn Header="Ostrzeżenia" Binding="{Binding Ostrzezenia}" IsReadOnly="True" Width="350" MinWidth="200" />
+                </DataGrid.Columns>
+            </DataGrid>
+        </Border>
+
+        <!-- 3: Async Progress & Action Buttons Panel -->
+        <Border Grid.Row="3" Background="White" CornerRadius="6" Padding="14,10" Margin="0,10,0,0" BorderBrush="#E0E0E0" BorderThickness="1">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <!-- Progress Details & ProgressBar -->
+                <Grid Grid.Row="0" Margin="0,0,0,10">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0" Margin="0,0,0,4">
+                        <TextBlock Text="{Binding CurrentStatusMessage}" FontWeight="SemiBold" Foreground="#333333" HorizontalAlignment="Left" />
+                        <TextBlock Text="{Binding CurrentEmployeeName}" Foreground="#666666" HorizontalAlignment="Right" />
+                    </Grid>
+
+                    <ProgressBar Grid.Row="1" 
+                                 Height="10" 
+                                 Minimum="0" 
+                                 Maximum="{Binding TotalProgress, Mode=OneWay}" 
+                                 Value="{Binding CurrentProgress, Mode=OneWay}" 
+                                 Foreground="#0078D7" 
+                                 Background="#EBEBEB" 
+                                 BorderThickness="0" />
+                </Grid>
+
+                <!-- Action Buttons Toolbar -->
+                <Grid Grid.Row="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="Postęp: " Foreground="#666666" />
+                        <TextBlock Text="{Binding CurrentProgress}" FontWeight="Bold" Foreground="#333333" />
+                        <TextBlock Text=" / " Foreground="#666666" />
+                        <TextBlock Text="{Binding TotalProgress}" FontWeight="Bold" Foreground="#333333" />
+                        <TextBlock Text=" (" Foreground="#666666" />
+                        <TextBlock Text="{Binding ProgressPercentage, StringFormat={}{0:F0}%}" FontWeight="Bold" Foreground="#0078D7" />
+                        <TextBlock Text=")" Foreground="#666666" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <Button Content="Anuluj import" 
+                                Command="{Binding CancelImportCommand}" 
+                                Style="{StaticResource SecondaryActionButton}" 
+                                Margin="0,0,10,0" 
+                                Width="120" />
+                        <Button Content="Rozpocznij import" 
+                                Command="{Binding StartImportCommand}" 
+                                Style="{StaticResource FlatActionButton}" 
+                                Width="150" />
+                        <Button Content="Zamknij" 
+                                Click="OnCloseClicked" 
+                                Style="{StaticResource SecondaryActionButton}" 
+                                Margin="10,0,0,0" 
+                                Width="90" 
+                                IsEnabled="{Binding CanClose}" />
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

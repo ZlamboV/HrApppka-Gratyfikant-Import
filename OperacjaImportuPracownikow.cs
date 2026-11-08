@@ -21,7 +21,7 @@ namespace HrAppka_Import_Pracowników
     {
         protected override string[]? SciezkaWMenu => null;
 
-        public override string Nazwa => "Importuj z HrAppka";
+        public override string Nazwa => "Import Pracowników (v1 Legacy)";
 
         protected override bool SprawdzCzyMoznaWykonac(IReadOnlyCollection<int> identyfikatoryWybranychElementow, IKontekstListyDanych kontekstListyDanych, IKontekstOperacji kontekstOperacji)
         {
@@ -68,7 +68,7 @@ namespace HrAppka_Import_Pracowników
         {
             var dialog = new OpenFileDialog();
             dialog.Filter = "Pliki Excel (*.xlsx)|*.xlsx";
-            dialog.Title = "Wybierz plik z wyeksportowanymi danymi HrAppka";
+            dialog.Title = "Import Pracowników - Wybierz plik z danymi (*.xlsx, *.csv)";
             dialog.CheckFileExists = true;
 
             var result = dialog.ShowDialog();
@@ -302,7 +302,7 @@ namespace HrAppka_Import_Pracowników
         private void ImportujDanePracownikow(IKontekstOperacji kontekstOperacji, List<PracownikImportRow> rows)
         {
             var okno = kontekstOperacji.Uchwyt.PodajObiektTypu<IOknoOperacjiZbiorczej>();
-            okno.Tytul = "Import pracowników z HrAppka";
+            okno.Tytul = "Import pracowników";
             okno.TekstPrzyciskuWykonaj = "Importuj";
             
             // Pre-analyze duplicates and validate PESEL before displaying
