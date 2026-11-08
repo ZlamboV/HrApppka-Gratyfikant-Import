@@ -1,7 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Package Identity="HrAppka_Import_Pracowników-1.0.8.16" DisplayName="Import Pracowników" VersionDisplayName="1.0.8.16">
+<Package Identity="HrAppka_Import_Pracowników-1.0.8.20" DisplayName="Import Pracowników" VersionDisplayName="1.0.8.20">
   <Contents>
-    <File Name="HrAppka_Import_Pracowników.dll" Size="270336" Time="134383891094895659" />
+    <File Name="HrAppka_Import_Pracowników.dll" Size="297984" Time="134384435546293039" />
     <File Name="HrAppka_Import_Pracowników.plugin" Size="42" Time="134261758149742031" />
     <File Name="MiniExcel.dll" Size="254464" Time="133660368900000000" />
   </Contents>
