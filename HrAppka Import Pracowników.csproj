@@ -16,9 +16,9 @@
     <Product>Import Pracowników</Product>
     <Description>Wtyczka importu pracowników dla Gratyfikant Nexo Pro</Description>
     <Company>Antigravity Dev Team</Company>
-    <Version>1.0.8.16</Version>
-    <AssemblyVersion>1.0.8.16</AssemblyVersion>
-    <FileVersion>1.0.8.16</FileVersion>
+    <Version>1.0.8.20</Version>
+    <AssemblyVersion>1.0.8.20</AssemblyVersion>
+    <FileVersion>1.0.8.20</FileVersion>
 
     <nexoSdkBinPath>C:\Users\zasc2\AppData\Local\InsERT\Deployments\Nexo\KLINEX SP_Z_O_Oa4bfb87390e94eea9\Binaries\</nexoSdkBinPath>
     <nexoSdkNarzedziaPath>C:\ NEXO SDK SFERA\nexoSDK_61.0.4.9400\Narzedzia\</nexoSdkNarzedziaPath>
@@ -29,7 +29,11 @@
       <HintPath>$(nexoSdkBinPath)InsERT.Mox.Launcher.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="Microsoft.Data.SqlClient">
+        <Reference Include="Microsoft.Data.Sqlite">
+      <HintPath>$(nexoSdkBinPath)Microsoft.Data.Sqlite.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+<Reference Include="Microsoft.Data.SqlClient">
       <HintPath>$(nexoSdkBinPath)Microsoft.Data.SqlClient.dll</HintPath>
       <Private>false</Private>
     </Reference>
