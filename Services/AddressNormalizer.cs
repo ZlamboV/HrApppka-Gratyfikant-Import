@@ -324,7 +324,7 @@ namespace HrAppka_Import_Pracowników.Services
             }
         }
 
-        private static (string CleanStreet, string NrDomu, string NrLokalu) ExtractHouseFromStreetIfMissing(
+        public static (string CleanStreet, string NrDomu, string NrLokalu) ExtractHouseFromStreetIfMissing(
             string street,
             string currentDom,
             string currentLok)
@@ -347,6 +347,13 @@ namespace HrAppka_Import_Pracowników.Services
                          (!string.IsNullOrWhiteSpace(splitDom) && currentDom.Equals(splitDom, StringComparison.OrdinalIgnoreCase)))
                 {
                     return (stName, currentDom, currentLok);
+                }
+                else if (string.IsNullOrWhiteSpace(currentLok))
+                {
+                    // street had house number (e.g. 'Chodzki 5') and currentDom had apartment/lokal (e.g. '60')
+                    string finalDom = !string.IsNullOrWhiteSpace(splitDom) ? splitDom : stNumPart;
+                    string finalLok = currentDom;
+                    return (stName, finalDom, finalLok);
                 }
             }
 
